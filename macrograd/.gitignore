@@ -1,0 +1,10 @@
+*.out
+mnist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug files
+*.dSYM/
+gmon.out
