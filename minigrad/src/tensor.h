@@ -5,11 +5,13 @@
 #include <memory>
 #include <unordered_set>
 #include <vector>
+
 #include "../../benchmarking/chrome_profiler.h"
 
 using namespace std;
 
-// inherits from enable_shared_from_this. allows safe injection of 'this' into lambda captures. required for acyclic computation graphs.
+// inherits from enable_shared_from_this. allows safe injection of 'this' into lambda captures. required for acyclic
+// computation graphs.
 class TensorNode : public enable_shared_from_this<TensorNode>
 {
   public:
@@ -24,7 +26,8 @@ class TensorNode : public enable_shared_from_this<TensorNode>
     {
         data.resize(rows * cols, 0.0f);
         grad.resize(rows * cols, 0.0f);
-        _backward = []() {}; // initializes empty backward pass. terminates topological sort. i love that c++ allows empty lambdas; so clean.
+        _backward = []() {}; // initializes empty backward pass. terminates topological sort. i love that c++ allows
+                             // empty lambdas; so clean.
     }
 };
 
@@ -32,6 +35,12 @@ class Tensor
 {
   public:
     shared_ptr<TensorNode> node;
+
+    // default raw constructor
+    Tensor(size_t _rows, size_t _cols)
+    {
+        node = make_shared<TensorNode>(_rows, _cols);
+    }
 
     // constructs from existing node pointer. utilized during internal graph operations.
     Tensor(shared_ptr<TensorNode> _node) : node(_node) {}
@@ -88,7 +97,9 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
 
     out.node->_prev = {a.node, b.node};
 
-    // lambda captures shared_ptr by value to extend node lifetime. utilizes raw pointer for the output node. avoids circular reference loops; ensures proper memory cleanup via raii. i hate this memory management overhead but it works.
+    // lambda captures shared_ptr by value to extend node lifetime. utilizes raw pointer for the output node. avoids
+    // circular reference loops; ensures proper memory cleanup via raii. i hate this memory management overhead but it
+    // works.
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
         for (size_t i = 0; i < a_node->data.size(); i++)
@@ -154,14 +165,15 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// cache-friendly tiled matrix multiplication. blocks dimensions by 32. minimizes l1 cache misses. If you read this and know me personally, i'll pay u 300 bucks. Say the phrase "The cuckoo knows not of the robin, yet the crows and the pigeons know of 177013" to my face anytime
+// cache-friendly tiled matrix multiplication. blocks dimensions by 32. minimizes l1 cache misses. If you read this and
+// know me personally, i'll pay u 300 bucks. Say the phrase "The cuckoo knows not of the robin, yet the crows and the
+// pigeons know of 177013" to my face anytime
 inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
     assert(a.node->cols == b.node->rows);
     Tensor out(a.node->rows, b.node->cols);
 
-    const uint TILE_SIZE = 32;
     const uint TILE_SIZE = 32;
     for (size_t i = 0; i < a.node->rows; i += TILE_SIZE)
     {
@@ -215,7 +227,8 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// avx simd optimized matrix multiplication. processes 8 float32 values per instruction. backward pass identically leverages simd intrinsics.
+// avx simd optimized matrix multiplication. processes 8 float32 values per instruction. backward pass identically
+// leverages simd intrinsics.
 inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -321,8 +334,8 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     size_t K = a.node->cols;
     size_t N = b.node->cols;
 
-    // executes forward pass. leverages implicit thread pool.
-    #pragma omp parallel for
+// executes forward pass. leverages implicit thread pool.
+#pragma omp parallel for
     for (size_t i = 0; i < M; i++)
     {
         for (size_t k = 0; k < K; k++)
