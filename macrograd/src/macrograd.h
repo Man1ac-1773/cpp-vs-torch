@@ -14,15 +14,6 @@
 // defines that an operation can only have two operands
 #define MAX_PARENT 2
 
-typedef enum tensor_ops
-{
-    NONE = 1,
-    ADD,
-    HADMUL,
-    MATMUL,
-
-} OPS;
-
 typedef struct tensor_float_t Tensor;
 typedef void (*BackwardFn)(Tensor* self);
 
@@ -40,7 +31,6 @@ struct tensor_float_t
     uint stride[2]; // byte offset in any direction
     Tensor* parent[MAX_PARENT];
     int n_parent;
-    OPS op;
     BackwardFn backward;
     int visited;
 };
@@ -57,7 +47,7 @@ static inline bool _compare_shape(Tensor* a, Tensor* b)
 }
 
 // Create new tensor with given dimensions, and operation
-static inline Tensor* new_tensor(uint rows, uint cols, OPS op)
+static inline Tensor* new_tensor(uint rows, uint cols)
 {
     Tensor* t = (Tensor*) arena_alloc(&g_arena, sizeof(Tensor));
 
@@ -70,7 +60,6 @@ static inline Tensor* new_tensor(uint rows, uint cols, OPS op)
     t->stride[0] = cols;
     t->stride[1] = 1;
     t->n_parent = 0;
-    t->op = op;
     t->backward = NULL;
     t->visited = 0;
 
@@ -117,7 +106,7 @@ static inline Tensor* tensor_add(Tensor* a, Tensor* b)
     {
         fprintf(stderr, "Shape mismatch when addition\n");
     }
-    Tensor* out = new_tensor(a->shape[0], a->shape[1], ADD);
+    Tensor* out = new_tensor(a->shape[0], a->shape[1]);
     __mat_add(a, b, out); // just write data
 
     // gradient tracking
@@ -156,7 +145,7 @@ static inline Tensor* tensor_hadmard(Tensor* a, Tensor* b)
         fprintf(stderr, "Shape mismatch for hadmard product\n");
         return NULL;
     }
-    Tensor* out = new_tensor(a->shape[0], a->shape[1], HADMUL);
+    Tensor* out = new_tensor(a->shape[0], a->shape[1]);
     __mat_hadmard_mul(a, b, out);
     out->parent[0] = a;
     out->parent[1] = b;
@@ -282,7 +271,7 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
         fprintf(stderr, "Matmul shape mismatch\n");
         return NULL;
     }
-    Tensor* out = new_tensor(a->shape[0], b->shape[1], MATMUL);
+    Tensor* out = new_tensor(a->shape[0], b->shape[1]);
     // Standard Naive GEMM (O(N^3))
     for (uint i = 0; i < a->shape[0]; i++)
     {
@@ -316,7 +305,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
         return NULL;
     }
 
-    Tensor* out = new_tensor(a->shape[0], b->shape[1], MATMUL);
+    Tensor* out = new_tensor(a->shape[0], b->shape[1]);
 
     // navigating between tiles)
     for (uint i = 0; i < a->shape[0]; i += TILE_SIZE)
@@ -360,7 +349,7 @@ static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
 {
     if (!_shape_check_matmul(a, b))
         return NULL;
-    Tensor* out = new_tensor(a->shape[0], b->shape[1], MATMUL);
+    Tensor* out = new_tensor(a->shape[0], b->shape[1]);
 
     uint M = a->shape[0];
     uint K = a->shape[1];
