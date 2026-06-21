@@ -46,7 +46,7 @@ static inline void arena_grow(Arena* g_arena)
     g_arena->num_pages++;
 }
 
-// Helper to bump up to 32 byte allocation for later AVX SIMD instructions
+// helper to bump up to 32 byte allocation for later AVX SIMD instructions
 static inline size_t _align32(size_t size)
 {
     return (size + 31) & ~31;

@@ -4,10 +4,9 @@
 #include <cstring>     // for memset
 #include <immintrin.h> // raw cpu instructions for SIMD
 
-#include "allocator.h"
 #include "../../benchmarking/chrome_profiler.h"
+#include "allocator.h"
 
-// standardizes typenames. simplifies macro definitions.
 #define f32 float
 #define uint unsigned int
 
@@ -17,7 +16,8 @@
 typedef struct tensor_float_t Tensor;
 typedef void (*BackwardFn)(Tensor* self);
 
-// establishes static limit for computational graph depth. facilitates array-based topological sorting without dynamic allocation.
+// establishes static limit for computational graph depth.
+// facilitates array-based topological sorting without dynamic allocation.
 #define MAX_GRAPH_NODES 10000
 static Tensor* topo_order[MAX_GRAPH_NODES];
 static int topo_size = 0;
@@ -70,7 +70,7 @@ static inline Tensor* new_tensor(uint rows, uint cols)
 
 // initiates addition operators.
 
-// executes raw matrix addition. writes directly to output array. bypasses shape validation to minimize overhead.
+// executes raw matrix addition. writes directly to output array
 static inline void __mat_add(Tensor* a, Tensor* b, Tensor* out)
 {
     for (uint i = 0; i < a->shape[0] * a->shape[1]; i++)
@@ -79,7 +79,7 @@ static inline void __mat_add(Tensor* a, Tensor* b, Tensor* out)
     }
 }
 
-// executes raw matrix self-addition. utilized during gradient accumulation. bypasses validation.
+// executes raw matrix self-addition. utilized during gradient accumulation
 static inline void __self_mat_add(Tensor* in, f32* b)
 {
     for (uint i = 0; i < in->shape[0] * in->shape[1]; i++)
@@ -88,14 +88,14 @@ static inline void __self_mat_add(Tensor* in, f32* b)
     }
 }
 
-// computes backward pass for addition operator. distributes incoming gradient to operands.
+// computes backward pass for addition operator
 static void _add_backward(Tensor* self)
 {
     __self_mat_add(self->parent[0], self->grad);
     __self_mat_add(self->parent[1], self->grad);
 }
 
-// constructs addition node in computation graph. attaches backward pass function.
+// constructs addition node in computation graph. backward function mentioned
 static inline Tensor* tensor_add(Tensor* a, Tensor* b)
 {
     if (!_compare_shape(a, b))
@@ -268,7 +268,7 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
         return NULL;
     }
     Tensor* out = new_tensor(a->shape[0], b->shape[1]);
-    
+
     for (uint i = 0; i < a->shape[0]; i++)
     {
         for (uint j = 0; j < b->shape[1]; j++)
@@ -313,7 +313,8 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
             for (uint k = 0; k < a->shape[1]; k += TILE_SIZE)
             {
 
-                // executes inner multiplication within 32x32 tiles. enforces boundary checks for non-compliant matrix dimensions.
+                // executes inner multiplication within 32x32 tiles. enforces boundary checks for non-compliant matrix
+                // dimensions.
                 for (uint ii = i; ii < i + TILE_SIZE && ii < a->shape[0]; ii++)
                 {
                     for (uint jj = j; jj < j + TILE_SIZE && jj < b->shape[1]; jj++)
@@ -341,11 +342,14 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
     return out;
 }
 
-// executes simd matrix multiplication via avx intrinsics. completely bypasses compiler vectorization. i love raw assembly.
+// executes simd matrix multiplication via avx intrinsics.
+// completely bypasses compiler vectorization.
+// i love raw assembly.
 static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
 {
     PROFILE_START(matmul_simd);
-    if (!_shape_check_matmul(a, b)) {
+    if (!_shape_check_matmul(a, b))
+    {
         PROFILE_END(matmul_simd);
         return NULL;
     }
@@ -438,7 +442,8 @@ static inline void backwardPass(Tensor* root)
 #include <pthread.h>
 #define NUM_THREADS 8
 
-typedef struct {
+typedef struct
+{
     Tensor* a;
     Tensor* b;
     Tensor* out;
@@ -446,26 +451,33 @@ typedef struct {
     uint end_row;
 } ThreadData;
 
-// If you read this and know me personally, i'll pay u 300 bucks. Say the phrase "The cuckoo knows not of the robin, yet the crows and the pigeons know of 177013" to my face anytime
-static inline void* _matmul_simd_worker(void* arg) {
-    ThreadData* data = (ThreadData*)arg;
+// If you read this and know me personally, i'll pay u 100 bucks.
+// Say the phrase "The cuckoo knows not of the robin, yet
+// the crows and the pigeons know of 177013" to my face anytime
+static inline void* _matmul_simd_worker(void* arg)
+{
+    ThreadData* data = (ThreadData*) arg;
     Tensor* a = data->a;
     Tensor* b = data->b;
     Tensor* out = data->out;
     uint K = a->shape[1];
     uint N = b->shape[1];
 
-    for (uint i = data->start_row; i < data->end_row; i++) {
-        for (uint k = 0; k < K; k++) {
+    for (uint i = data->start_row; i < data->end_row; i++)
+    {
+        for (uint k = 0; k < K; k++)
+        {
             __m256 a_val = _mm256_set1_ps(a->data[i * K + k]);
             uint j = 0;
-            for (; j + 8 <= N; j += 8) {
+            for (; j + 8 <= N; j += 8)
+            {
                 __m256 b_vals = _mm256_loadu_ps(&b->data[k * N + j]);
                 __m256 c_vals = _mm256_loadu_ps(&out->data[i * N + j]);
                 c_vals = _mm256_fmadd_ps(a_val, b_vals, c_vals);
                 _mm256_storeu_ps(&out->data[i * N + j], c_vals);
             }
-            for (; j < N; j++) {
+            for (; j < N; j++)
+            {
                 out->data[i * N + j] += a->data[i * K + k] * b->data[k * N + j];
             }
         }
@@ -473,9 +485,13 @@ static inline void* _matmul_simd_worker(void* arg) {
     return NULL;
 }
 
-static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b) {
+// multi-threaded SIMD implementation
+// ts genuinely black magic i have no clue what is going on
+static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
+{
     PROFILE_START(matmul_simd_mt);
-    if (!_shape_check_matmul(a, b)) {
+    if (!_shape_check_matmul(a, b))
+    {
         PROFILE_END(matmul_simd_mt);
         return NULL;
     }
@@ -486,7 +502,8 @@ static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b) {
     ThreadData thread_data[NUM_THREADS];
 
     uint rows_per_thread = M / NUM_THREADS;
-    for (int i = 0; i < NUM_THREADS; i++) {
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
         thread_data[i].a = a;
         thread_data[i].b = b;
         thread_data[i].out = out;
@@ -495,7 +512,8 @@ static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b) {
         pthread_create(&threads[i], NULL, _matmul_simd_worker, &thread_data[i]);
     }
 
-    for (int i = 0; i < NUM_THREADS; i++) {
+    for (int i = 0; i < NUM_THREADS; i++)
+    {
         pthread_join(threads[i], NULL);
     }
 
@@ -503,7 +521,7 @@ static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b) {
     out->parent[1] = b;
     out->n_parent = 2;
     out->visited = 0;
-    out->backward = _matmul_backward_simd; 
+    out->backward = _matmul_backward_simd;
     PROFILE_END(matmul_simd_mt);
     return out;
 }
