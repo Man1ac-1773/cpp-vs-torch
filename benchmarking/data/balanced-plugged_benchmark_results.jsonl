@@ -54,4 +54,7 @@
 {"benchmark": "matmul", "N": 900, "kernel": "simd", "avg_cycles": 292545388, "min_cycles": 290458084, "avg_time": 0.104364, "min_time": 0.103619}
 {"benchmark": "matmul", "N": 1000, "kernel": "naive", "avg_cycles": 2915043932, "min_cycles": 2914420067, "avg_time": 1.03992, "min_time": 1.0397}
 {"benchmark": "matmul", "N": 1000, "kernel": "tiled", "avg_cycles": 1285019818, "min_cycles": 1283514026, "avg_time": 0.458422, "min_time": 0.457885}
-{"benchmark": "matmul", "N": 
+{"benchmark": "matmul", "N": 1000, "kernel": "simd", "avg_cycles": 429210868, "min_cycles": 425429601, "avg_time": 0.153118, "min_time": 0.151769}
+{"benchmark": "matmul", "N": 2000, "kernel": "naive", "avg_cycles": 28324263968, "min_cycles": 26116191855, "avg_time": 10.1045, "min_time": 9.31678}
+{"benchmark": "matmul", "N": 2000, "kernel": "tiled", "avg_cycles": 10378350358, "min_cycles": 10365216653, "avg_time": 3.70241, "min_time": 3.69772}
+{"benchmark": "matmul", "N": 2000, "kernel": "simd", "avg_cycles": 3636876433, "min_cycles": 3624504675, "avg_time": 1.29743, "min_time": 1.29302}
