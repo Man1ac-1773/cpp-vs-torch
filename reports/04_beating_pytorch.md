@@ -29,3 +29,7 @@ It was incredibly interesting to see C++ beat C in this specific phase. My manua
 OpenMP, however, uses dynamic work-stealing beneath the hood. As cores finish their chunks early, they dynamically pick up the remaining matrix rows from the slower cores. This completely eliminated the straggler problem, allowing the C++ engine to achieve a near-perfect 9.4x linear speedup and secure the ultimate win.
 
 **Key Learning:** Hardware threading is where the real leaps in performance happen, but static work allocation is vulnerable to OS noise. Dynamic thread pools are mandatory for maximum CPU utilization.
+
+### Scripts and Raw Data
+
+The multithreaded benchmarks were run using `../benchmarking/benchmark_mt_c.cpp`, `../benchmarking/benchmark_mt_cpp.cpp`, and `../benchmarking/benchmark_mt.py`. The full performance curves from N=10 to N=2000 are recorded in the respective `mt_benchmark_results.jsonl` files located inside the `c-data`, `cpp-data`, and `py-data` directories.

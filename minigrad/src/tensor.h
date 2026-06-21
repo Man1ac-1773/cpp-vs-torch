@@ -9,7 +9,7 @@
 
 using namespace std;
 
-// inherit from enable_shared_from_this so we can pass 'this' into our lambda captures safely
+// inherits from enable_shared_from_this. allows safe injection of 'this' into lambda captures. required for acyclic computation graphs.
 class TensorNode : public enable_shared_from_this<TensorNode>
 {
   public:
@@ -24,7 +24,7 @@ class TensorNode : public enable_shared_from_this<TensorNode>
     {
         data.resize(rows * cols, 0.0f);
         grad.resize(rows * cols, 0.0f);
-        _backward = []() {}; // empty lambda
+        _backward = []() {}; // initializes empty backward pass. terminates topological sort. i love that c++ allows empty lambdas; so clean.
     }
 };
 
@@ -33,17 +33,8 @@ class Tensor
   public:
     shared_ptr<TensorNode> node;
 
-    // public constructor
-    Tensor(size_t _rows, size_t _cols)
-    {
-        node = make_shared<TensorNode>(_rows, _cols);
-    }
-
-    // internal constructor
-    // when constructing from existing node
+    // constructs from existing node pointer. utilized during internal graph operations.
     Tensor(shared_ptr<TensorNode> _node) : node(_node) {}
-
-    // getters for data read and write
     float& operator()(size_t r, size_t c)
     {
         return node->data[r * node->cols + c];
@@ -97,9 +88,7 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
 
     out.node->_prev = {a.node, b.node};
 
-    // lambda copies shared_ptr
-    // getting raw pointer of out node, because otherwise it would be a cyclical reference
-    // and ptr count would never hit 0, meaning no memory cleanup
+    // lambda captures shared_ptr by value to extend node lifetime. utilizes raw pointer for the output node. avoids circular reference loops; ensures proper memory cleanup via raii. i hate this memory management overhead but it works.
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
         for (size_t i = 0; i < a_node->data.size(); i++)
@@ -112,8 +101,7 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// Naive matmul operator
-// uses unoptimized O(N^3) GEMM
+// naive matrix multiplication operator. utilizes standard o(n^3) gemm. severely bottlenecked by cache locality.
 inline Tensor operator*(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -136,7 +124,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
 
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
-        // grad_A += grad_out @B ^ T
+        // computes local gradient of a. grad_A += grad_out @ B^T.
         for (size_t i = 0; i < a_node->rows; i++)
         {
             for (size_t j = 0; j < b_node->cols; j++)
@@ -149,7 +137,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
             }
         }
 
-        // grad_B += A^T @ grad_out
+        // computes local gradient of b. grad_B += A^T @ grad_out.
         for (size_t k = 0; k < a_node->cols; k++)
         {
             for (size_t j = 0; j < b_node->cols; j++)
@@ -166,8 +154,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// Tiled, cache-friendly matmul operator
-// TILE_SIZE = 32
+// cache-friendly tiled matrix multiplication. blocks dimensions by 32. minimizes l1 cache misses. If you read this and know me personally, i'll pay u 300 bucks. Say the phrase "The cuckoo knows not of the robin, yet the crows and the pigeons know of 177013" to my face anytime
 inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -175,7 +162,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     Tensor out(a.node->rows, b.node->cols);
 
     const uint TILE_SIZE = 32;
-    // Exactly the same 6-loop structure as macrograd!
+    const uint TILE_SIZE = 32;
     for (size_t i = 0; i < a.node->rows; i += TILE_SIZE)
     {
         for (size_t j = 0; j < b.node->cols; j += TILE_SIZE)
@@ -197,7 +184,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     }
 
     out.node->_prev = {a.node, b.node};
-    // naive backward pass. does not use tiling
+    // executes naive backward pass. omits tiling logic to minimize code complexity.
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
         for (size_t i = 0; i < a_node->rows; i++)
@@ -228,8 +215,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// Optimized SIMD AVX enabled matmul
-// backward pass also uses SIMD for high optimization
+// avx simd optimized matrix multiplication. processes 8 float32 values per instruction. backward pass identically leverages simd intrinsics.
 inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -240,7 +226,7 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
     size_t K = a.node->cols;
     size_t N = b.node->cols;
 
-    // ==== FORWARD PASS (SIMD) ====
+    // initiates forward pass. relies on _mm256_fmadd_ps.
     for (size_t i = 0; i < M; i++)
     {
         for (size_t k = 0; k < K; k++)
@@ -264,10 +250,10 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
 
     out.node->_prev = {a.node, b.node};
 
-    // ==== BACKWARD PASS (SIMD) ====
+    // initiates backward pass. utilizes simd loads and fma operations.
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), M, K, N]()
     {
-        // grad_B += A^T @ grad_out
+        // computes local gradient of b. grad_B += A^T @ grad_out.
         for (size_t k = 0; k < K; k++)
         {
             for (size_t i = 0; i < M; i++)
@@ -289,7 +275,7 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
             }
         }
 
-        // grad_A += grad_out @ B^T
+        // computes local gradient of a. grad_A += grad_out @ B^T.
         std::vector<float> B_T(K * N);
         for (size_t k = 0; k < K; k++)
         {
@@ -324,7 +310,7 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// Multithreaded SIMD AVX Matmul (OpenMP)
+// openmp accelerated simd matrix multiplication. utilizes dynamic loop scheduling via omp parallel for.
 inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -335,7 +321,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     size_t K = a.node->cols;
     size_t N = b.node->cols;
 
-    // ==== FORWARD PASS (SIMD + OpenMP) ====
+    // executes forward pass. leverages implicit thread pool.
     #pragma omp parallel for
     for (size_t i = 0; i < M; i++)
     {
@@ -359,7 +345,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     }
 
     out.node->_prev = {a.node, b.node};
-    // backward pass (using the same logic as single threaded simd)
+    // executes backward pass. inherits single-threaded simd logic to avoid write contention.
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), M, K, N]()
     {
         for (size_t k = 0; k < K; k++)

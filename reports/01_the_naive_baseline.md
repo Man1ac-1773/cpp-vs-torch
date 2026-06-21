@@ -26,3 +26,7 @@ When the naive nested loop iterates over the columns of the second matrix, the C
 **Key Learning:** Modern CPUs are heavily optimized for sequential memory access. When you skip around, the CPU's pre-fetcher cannot predict what memory you need next. This causes a phenomenon known as "Cache Thrashing", where the CPU constantly waits for data to be fetched from slow main memory instead of having it readily available in the ultra-fast L1 cache.
 
 To fix this 17-second disaster, I needed to step in and restructure the memory access patterns manually.
+
+### Scripts and Raw Data
+
+The benchmarking logic for this phase can be found in `../benchmarking/benchmark.cpp` and `../benchmarking/benchmark.py`. The raw sweeping data used to generate these insights is logged in `../benchmarking/c-data/`, `../benchmarking/cpp-data/`, and `../benchmarking/py-data/`.

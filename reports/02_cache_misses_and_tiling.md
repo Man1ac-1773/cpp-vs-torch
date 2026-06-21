@@ -26,3 +26,7 @@ The naive algorithm triggered nearly one billion cache misses. Tiling reduced th
 **Key Learning:** Memory access patterns are often more important than the actual math. By making sure the 32x32 blocks fit perfectly inside the L1 cache, I completely bypassed the main memory bottleneck. The CPU spent its time actually doing math instead of sitting idle waiting for RAM to respond.
 
 It is actually crazy how much performance you lose just by reading memory in the wrong order lmao. But even with a 2x speedup, I was still miles behind PyTorch. It was time to bypass the compiler entirely.
+
+### Scripts and Raw Data
+
+The PMU profiling logic for this experiment is isolated in `../benchmarking/cache_bench.cpp`, which interfaces directly with the Linux syscalls via `../benchmarking/perf_profiler.h`.

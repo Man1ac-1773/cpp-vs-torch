@@ -33,3 +33,7 @@ The data perfectly explained the anomaly. Because the C engine uses a bump alloc
 The C++ engine, however, triggers the `std::vector` destructor when the matrix goes out of scope, returning the memory to the OS. On the very next iteration, the OS has to pause the CPU, trap the process, and remap the physical RAM pages, triggering thousands of page faults per matrix. 
 
 **Key Learning:** Over a 10-run sweep, the C++ engine suffered millions of microscopic OS context switches, adding a massive 0.35s overhead. High-level abstractions like `std::vector` are incredibly convenient, but they are absolutely not free lmao.
+
+### Scripts and Raw Data
+
+The raw execution times for the SIMD anomaly were generated via `../benchmarking/benchmark.cpp` and stored in the `cpp-data` and `c-data` folders. The memory jitter (page fault) benchmarks were executed via ad-hoc scripts utilizing the Linux `<sys/resource.h>` library to track `RUSAGE_SELF` minor page faults.
