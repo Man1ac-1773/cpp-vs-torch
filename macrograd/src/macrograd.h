@@ -5,6 +5,7 @@
 #include <immintrin.h> // raw cpu instructions for SIMD
 
 #include "allocator.h"
+#include "../../benchmarking/chrome_profiler.h"
 
 // typedef for easier typinh
 #define f32 float
@@ -49,6 +50,7 @@ static inline bool _compare_shape(Tensor* a, Tensor* b)
 // Create new tensor with given dimensions, and operation
 static inline Tensor* new_tensor(uint rows, uint cols)
 {
+    PROFILE_START(new_tensor);
     Tensor* t = (Tensor*) arena_alloc(&g_arena, sizeof(Tensor));
 
     size_t size_req = rows * cols * sizeof(f32);
@@ -65,6 +67,7 @@ static inline Tensor* new_tensor(uint rows, uint cols)
 
     memset(t->data, 0, size_req);
     memset(t->grad, 0, size_req);
+    PROFILE_END(new_tensor);
     return t;
 }
 
@@ -266,9 +269,11 @@ static void _matmul_backward_simd(Tensor* self)
 // Tensor matrix multiplication
 static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
 {
+    PROFILE_START(matmul_naive);
     if (!_shape_check_matmul(a, b))
     {
         fprintf(stderr, "Matmul shape mismatch\n");
+        PROFILE_END(matmul_naive);
         return NULL;
     }
     Tensor* out = new_tensor(a->shape[0], b->shape[1]);
@@ -290,6 +295,7 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
     out->visited = 0;
     out->backward = _matmul_backward;
 
+    PROFILE_END(matmul_naive);
     return out;
 }
 
@@ -299,9 +305,11 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
 // Pushes a tile into L1 then matmuls it
 static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
 {
+    PROFILE_START(matmul_tiled);
     if (!_shape_check_matmul(a, b))
     {
         fprintf(stderr, "Matmul shape mismatch\n");
+        PROFILE_END(matmul_tiled);
         return NULL;
     }
 
@@ -340,6 +348,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
 
     out->backward = _matmul_backward;
 
+    PROFILE_END(matmul_tiled);
     return out;
 }
 
@@ -347,8 +356,11 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
 // written with gemini
 static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
 {
-    if (!_shape_check_matmul(a, b))
+    PROFILE_START(matmul_simd);
+    if (!_shape_check_matmul(a, b)) {
+        PROFILE_END(matmul_simd);
         return NULL;
+    }
     Tensor* out = new_tensor(a->shape[0], b->shape[1]);
 
     uint M = a->shape[0];
@@ -394,6 +406,7 @@ static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
     out->n_parent = 2;
     out->visited = 0;
     out->backward = _matmul_backward_simd;
+    PROFILE_END(matmul_simd);
     return out;
 }
 
@@ -434,6 +447,78 @@ static inline void backwardPass(Tensor* root)
             topo_order[i]->backward(topo_order[i]);
         }
     }
+}
+
+#include <pthread.h>
+#define NUM_THREADS 8
+
+typedef struct {
+    Tensor* a;
+    Tensor* b;
+    Tensor* out;
+    uint start_row;
+    uint end_row;
+} ThreadData;
+
+static inline void* _matmul_simd_worker(void* arg) {
+    ThreadData* data = (ThreadData*)arg;
+    Tensor* a = data->a;
+    Tensor* b = data->b;
+    Tensor* out = data->out;
+    uint K = a->shape[1];
+    uint N = b->shape[1];
+
+    for (uint i = data->start_row; i < data->end_row; i++) {
+        for (uint k = 0; k < K; k++) {
+            __m256 a_val = _mm256_set1_ps(a->data[i * K + k]);
+            uint j = 0;
+            for (; j + 8 <= N; j += 8) {
+                __m256 b_vals = _mm256_loadu_ps(&b->data[k * N + j]);
+                __m256 c_vals = _mm256_loadu_ps(&out->data[i * N + j]);
+                c_vals = _mm256_fmadd_ps(a_val, b_vals, c_vals);
+                _mm256_storeu_ps(&out->data[i * N + j], c_vals);
+            }
+            for (; j < N; j++) {
+                out->data[i * N + j] += a->data[i * K + k] * b->data[k * N + j];
+            }
+        }
+    }
+    return NULL;
+}
+
+static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b) {
+    PROFILE_START(matmul_simd_mt);
+    if (!_shape_check_matmul(a, b)) {
+        PROFILE_END(matmul_simd_mt);
+        return NULL;
+    }
+    Tensor* out = new_tensor(a->shape[0], b->shape[1]);
+
+    uint M = a->shape[0];
+    pthread_t threads[NUM_THREADS];
+    ThreadData thread_data[NUM_THREADS];
+
+    uint rows_per_thread = M / NUM_THREADS;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        thread_data[i].a = a;
+        thread_data[i].b = b;
+        thread_data[i].out = out;
+        thread_data[i].start_row = i * rows_per_thread;
+        thread_data[i].end_row = (i == NUM_THREADS - 1) ? M : (i + 1) * rows_per_thread;
+        pthread_create(&threads[i], NULL, _matmul_simd_worker, &thread_data[i]);
+    }
+
+    for (int i = 0; i < NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    out->parent[0] = a;
+    out->parent[1] = b;
+    out->n_parent = 2;
+    out->visited = 0;
+    out->backward = _matmul_backward_simd; 
+    PROFILE_END(matmul_simd_mt);
+    return out;
 }
 
 #endif

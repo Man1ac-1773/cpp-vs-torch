@@ -5,6 +5,7 @@
 #include <memory>
 #include <unordered_set>
 #include <vector>
+#include "../../benchmarking/chrome_profiler.h"
 
 using namespace std;
 
@@ -84,6 +85,7 @@ class Tensor
 
 inline Tensor operator+(const Tensor& a, const Tensor& b)
 {
+    PROFILE_FUNCTION();
     assert(a.node->rows == b.node->rows && a.node->cols == b.node->cols);
 
     Tensor out(a.node->rows, a.node->cols);
@@ -114,6 +116,7 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
 // uses unoptimized O(N^3) GEMM
 inline Tensor operator*(const Tensor& a, const Tensor& b)
 {
+    PROFILE_FUNCTION();
     assert(a.node->cols == b.node->rows);
 
     Tensor out(a.node->rows, b.node->cols);
@@ -167,6 +170,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
 // TILE_SIZE = 32
 inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
 {
+    PROFILE_FUNCTION();
     assert(a.node->cols == b.node->rows);
     Tensor out(a.node->rows, b.node->cols);
 
@@ -228,6 +232,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
 // backward pass also uses SIMD for high optimization
 inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
 {
+    PROFILE_FUNCTION();
     assert(a.node->cols == b.node->rows);
     Tensor out(a.node->rows, b.node->cols);
 
@@ -285,6 +290,99 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
         }
 
         // grad_A += grad_out @ B^T
+        std::vector<float> B_T(K * N);
+        for (size_t k = 0; k < K; k++)
+        {
+            for (size_t j = 0; j < N; j++)
+            {
+                B_T[j * K + k] = b_node->data[k * N + j];
+            }
+        }
+
+        for (size_t i = 0; i < M; i++)
+        {
+            for (size_t j = 0; j < N; j++)
+            {
+                __m256 grad_out_val = _mm256_set1_ps(out_node->grad[i * N + j]);
+                size_t k = 0;
+                for (; k + 8 <= K; k += 8)
+                {
+                    __m256 bt_vals = _mm256_loadu_ps(&B_T[j * K + k]);
+                    __m256 grad_a_vals = _mm256_loadu_ps(&a_node->grad[i * K + k]);
+
+                    grad_a_vals = _mm256_fmadd_ps(grad_out_val, bt_vals, grad_a_vals);
+                    _mm256_storeu_ps(&a_node->grad[i * K + k], grad_a_vals);
+                }
+                for (; k < K; k++)
+                {
+                    a_node->grad[i * K + k] += out_node->grad[i * N + j] * B_T[j * K + k];
+                }
+            }
+        }
+    };
+
+    return out;
+}
+
+// Multithreaded SIMD AVX Matmul (OpenMP)
+inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
+{
+    PROFILE_FUNCTION();
+    assert(a.node->cols == b.node->rows);
+    Tensor out(a.node->rows, b.node->cols);
+
+    size_t M = a.node->rows;
+    size_t K = a.node->cols;
+    size_t N = b.node->cols;
+
+    // ==== FORWARD PASS (SIMD + OpenMP) ====
+    #pragma omp parallel for
+    for (size_t i = 0; i < M; i++)
+    {
+        for (size_t k = 0; k < K; k++)
+        {
+            __m256 a_val = _mm256_set1_ps(a(i, k));
+            size_t j = 0;
+            for (; j + 8 <= N; j += 8)
+            {
+                __m256 b_vals = _mm256_loadu_ps(&b(k, j));
+                __m256 c_vals = _mm256_loadu_ps(&out(i, j));
+
+                c_vals = _mm256_fmadd_ps(a_val, b_vals, c_vals);
+                _mm256_storeu_ps(&out(i, j), c_vals);
+            }
+            for (; j < N; j++)
+            {
+                out(i, j) += a(i, k) * b(k, j);
+            }
+        }
+    }
+
+    out.node->_prev = {a.node, b.node};
+    // backward pass (using the same logic as single threaded simd)
+    out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), M, K, N]()
+    {
+        for (size_t k = 0; k < K; k++)
+        {
+            for (size_t i = 0; i < M; i++)
+            {
+                __m256 a_val = _mm256_set1_ps(a_node->data[i * K + k]);
+                size_t j = 0;
+                for (; j + 8 <= N; j += 8)
+                {
+                    __m256 grad_out_vals = _mm256_loadu_ps(&out_node->grad[i * N + j]);
+                    __m256 grad_b_vals = _mm256_loadu_ps(&b_node->grad[k * N + j]);
+
+                    grad_b_vals = _mm256_fmadd_ps(a_val, grad_out_vals, grad_b_vals);
+                    _mm256_storeu_ps(&b_node->grad[k * N + j], grad_b_vals);
+                }
+                for (; j < N; j++)
+                {
+                    b_node->grad[k * N + j] += a_node->data[i * K + k] * out_node->grad[i * N + j];
+                }
+            }
+        }
+
         std::vector<float> B_T(K * N);
         for (size_t k = 0; k < K; k++)
         {
