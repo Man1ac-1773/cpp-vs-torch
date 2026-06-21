@@ -1,0 +1,5 @@
+[
+  {"cat":"function","dur":1096149,"name":"operator*","ph":"X","pid":0,"tid":3321414201,"ts":1782068558023661},
+  {"cat":"function","dur":391022,"name":"matmul_tiled","ph":"X","pid":0,"tid":3321414201,"ts":1782068559119840},
+  {"cat":"function","dur":183557,"name":"matmul_simd","ph":"X","pid":0,"tid":3321414201,"ts":1782068559510863}
+]

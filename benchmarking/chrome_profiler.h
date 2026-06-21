@@ -68,10 +68,11 @@ public:
     }
 };
 
-// C++ MACROS
 #define PROFILER_DUMP(filepath) Profiler::Get().Dump(filepath)
 #define PROFILE_SCOPE(name) ProfileTimer timer##__LINE__(name)
 #define PROFILE_FUNCTION() PROFILE_SCOPE(__FUNCTION__)
+#define PROFILE_START(name) ProfileTimer* _prof_##name = new ProfileTimer(#name)
+#define PROFILE_END(name) delete _prof_##name
 
 #else
 // ==================== C IMPLEMENTATION ====================

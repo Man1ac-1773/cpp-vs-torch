@@ -144,5 +144,8 @@ int main()
     run_kernel_sweep(json_out);
     json_out.close();
     cout << "Total time elapsed : " << get_wall_time() - start_time << endl;
+    
+    PROFILER_DUMP("trace.json");
+    cout << "Dumped Chrome Trace to trace.json!" << endl;
     return 0;
 }
