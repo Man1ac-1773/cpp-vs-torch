@@ -1,15 +1,28 @@
 # 02. Cache Misses and Tiling
 
-To fix the 17-second disaster from the naive implementation, I implemented Matrix Tiling. I broke the large matrices down into small 32x32 blocks. 
+To fix the 17-second disaster from the naive implementation, I implemented Matrix Tiling (also known as Loop Blocking). 
 
-This dropped the execution time by roughly 2x in both my C and C++ engines. But I wanted to prove exactly why this happened at the hardware level.
+Instead of iterating over the entire row and column sequentially, I broke the large matrices down into small 32x32 sub-matrices (blocks). By multiplying these small blocks together one at a time, I ensured that all the required data fit perfectly inside the CPU's tiny, ultra-fast 32KB L1 Data Cache.
 
-I tapped directly into the CPU's Performance Monitoring Unit (PMU) using the Linux `perf_event_open` syscall. I instructed the CPU to track every single time it tried to fetch data from the L1 Data Cache and failed, forcing a stall.
+This dropped the execution time by roughly 2x in both my C and C++ engines. But I wanted hard data to prove exactly why this happened at the hardware level.
 
-I ran the benchmark for an N=1000 matrix. Here is the data:
-- Naive Matmul: 996,030,754 L1 cache misses
-- Tiled Matmul: 3,409,932 L1 cache misses
+### Hooking into the Linux Kernel
 
-The naive algorithm triggered nearly a billion cache misses. Tiling reduced this by 292x down to just 3.4 million. By making sure the 32x32 blocks fit perfectly inside the CPU's ultra-fast 32KB L1 cache, I completely bypassed the main memory bottleneck. 
+I tapped directly into the CPU's Performance Monitoring Unit (PMU) using the Linux `perf_event_open` syscall. I instructed the CPU to track every single time it tried to fetch data from the L1 Data Cache and failed, forcing a CPU stall.
 
-It is actually crazy how much performance you lose just by reading memory in the wrong order lmao.
+I ran the profiler for an N=1000 matrix. 
+
+### L1 Data Cache Misses (N=1000)
+
+| Algorithm | Paradigm | L1 Cache Misses | Execution Time | Speedup |
+|---|---|---|---|---|
+| **Naive Matmul** | Sequential Columns | 996,030,754 | ~1.90s | 1.0x |
+| **Tiled Matmul** | 32x32 Sub-blocks | 3,409,932 | ~1.16s | 1.6x |
+
+### The Verdict
+
+The naive algorithm triggered nearly one billion cache misses. Tiling reduced this by 292x down to just 3.4 million. 
+
+**Key Learning:** Memory access patterns are often more important than the actual math. By making sure the 32x32 blocks fit perfectly inside the L1 cache, I completely bypassed the main memory bottleneck. The CPU spent its time actually doing math instead of sitting idle waiting for RAM to respond.
+
+It is actually crazy how much performance you lose just by reading memory in the wrong order lmao. But even with a 2x speedup, I was still miles behind PyTorch. It was time to bypass the compiler entirely.
