@@ -140,7 +140,7 @@ void run_kernel_sweep(ofstream& json_out)
 int main()
 {
     double start_time = get_wall_time();
-    ofstream json_out("./c-data/battery-saver_benchmark_results.jsonl");
+    ofstream json_out("./c-data/battery-saver-plugged_benchmark_results.jsonl");
     run_kernel_sweep(json_out);
     json_out.close();
     cout << "Total time elapsed : " << get_wall_time() - start_time << endl;
