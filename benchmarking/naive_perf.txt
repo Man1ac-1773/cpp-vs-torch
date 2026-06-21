@@ -1,1 +1,0 @@
-bash: line 21: perf: command not found
