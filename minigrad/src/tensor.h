@@ -77,3 +77,54 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
 
     return out;
 }
+
+inline Tensor operator*(const Tensor& a, const Tensor& b)
+{
+    assert(a.node->cols == b.node->rows);
+
+    Tensor out(a.node->rows, b.node->cols);
+
+    for (size_t i = 0; i < a.node->rows; i++)
+    {
+        for (size_t j = 0; j < b.node->cols; j++)
+        {
+            for (size_t k = 0; k < a.node->cols; k++)
+            {
+                out.node->data[i * b.node->cols + j] +=
+                    a.node->data[i * a.node->cols + k] * b.node->data[k * b.node->cols + j];
+            }
+        }
+    }
+    out.node->_prev = {a.node, b.node};
+
+    out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
+    {
+        // grad_A += grad_out @B ^ T
+        for (size_t i = 0; i < a_node->rows; i++)
+        {
+            for (size_t j = 0; j < b_node->cols; j++)
+            {
+                for (size_t k = 0; k < a_node->cols; k++)
+                {
+                    a_node->grad[i * a_node->cols + k] +=
+                        out_node->grad[i * out_node->cols + j] * b_node->data[k * b_node->cols + j];
+                }
+            }
+        }
+
+        // grad_B += A^T @ grad_out
+        for (size_t k = 0; k < a_node->cols; k++)
+        {
+            for (size_t j = 0; j < b_node->cols; j++)
+            {
+                for (size_t i = 0; i < a_node->rows; i++)
+                {
+                    b_node->grad[k * b_node->cols + j] +=
+                        a_node->data[i * a_node->cols + k] * out_node->grad[i * out_node->cols + j];
+                }
+            }
+        }
+    };
+
+    return out;
+}
