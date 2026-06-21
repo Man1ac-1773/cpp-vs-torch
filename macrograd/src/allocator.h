@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 // bump allocator constants
-#define ARENA_PAGE_SIZE (4 * 1024 * 1024) // 4 MB since tensors are large
+#define ARENA_PAGE_SIZE (1024 * 1024 * 1024) // 1GB, benchmarking in large tensors
 #define MAX_PAGES 1024
 
 typedef struct
@@ -72,17 +72,6 @@ static inline void* arena_alloc(Arena* g_arena, size_t size)
 static inline int get_arena_top(Arena* g_arena)
 {
     return g_arena->top;
-}
-
-static inline void reset_arena_and_zero_grad(Arena* g_arena, int mark)
-{
-    g_arena->top = mark;
-    for (int i = 0; i < mark; i++)
-    {
-        int p = i / ARENA_PAGE_SIZE;
-        int o = i % ARENA_PAGE_SIZE;
-        g_arena->pages[p][o]->grad = {0.0};
-    }
 }
 
 static inline void free_arena(Arena* g_arena)
