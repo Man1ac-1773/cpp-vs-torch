@@ -526,4 +526,67 @@ static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
     return out;
 }
 
+// executes backward pass for relu activation.
+static void _relu_backward(Tensor* self)
+{
+    for (uint i = 0; i < self->shape[0] * self->shape[1]; i++)
+    {
+        self->parent[0]->grad[i] += self->grad[i] * (self->parent[0]->data[i] > 0 ? 1.0f : 0.0f);
+    }
+}
+
+// applies rectified linear unit activation. constructs node in computation graph.
+static inline Tensor* tensor_relu(Tensor* a)
+{
+    Tensor* out = new_tensor(a->shape[0], a->shape[1]);
+    for (uint i = 0; i < a->shape[0] * a->shape[1]; i++)
+    {
+        out->data[i] = a->data[i] > 0 ? a->data[i] : 0.0f;
+    }
+    out->parent[0] = a;
+    out->n_parent = 1;
+    out->backward = _relu_backward;
+    return out;
+}
+
+// executes backward pass for mse loss.
+static void _mse_backward(Tensor* self)
+{
+    Tensor* pred = self->parent[0];
+    Tensor* target = self->parent[1];
+    uint n = pred->shape[0] * pred->shape[1];
+    f32 grad_out = self->grad[0];
+
+    for (uint i = 0; i < n; i++)
+    {
+        f32 diff = pred->data[i] - target->data[i];
+        pred->grad[i] += grad_out * (2.0f * diff / n);
+    }
+}
+
+// computes mean squared error loss. reduces to 1x1 scalar tensor.
+static inline Tensor* tensor_mse_loss(Tensor* pred, Tensor* target)
+{
+    if (!_compare_shape(pred, target))
+    {
+        fprintf(stderr, "Shape mismatch for MSE Loss\n");
+        return NULL;
+    }
+    Tensor* out = new_tensor(1, 1);
+    f32 sum = 0.0f;
+    uint n = pred->shape[0] * pred->shape[1];
+    for (uint i = 0; i < n; i++)
+    {
+        f32 diff = pred->data[i] - target->data[i];
+        sum += diff * diff;
+    }
+    out->data[0] = sum / n;
+    
+    out->parent[0] = pred;
+    out->parent[1] = target;
+    out->n_parent = 2;
+    out->backward = _mse_backward;
+    return out;
+}
+
 #endif

@@ -41,6 +41,24 @@ static inline void perf_init_l1_misses(PerfCounter* pc) {
     }
 }
 
+// Initializes a counter to track Total CPU Instructions
+static inline void perf_init_instructions(PerfCounter* pc) {
+    struct perf_event_attr pe;
+    memset(&pe, 0, sizeof(struct perf_event_attr));
+    pe.type = PERF_TYPE_HARDWARE;
+    pe.size = sizeof(struct perf_event_attr);
+    pe.config = PERF_COUNT_HW_INSTRUCTIONS;
+    
+    pe.disabled = 1;
+    pe.exclude_kernel = 1;
+    pe.exclude_hv = 1;
+
+    pc->fd = perf_event_open(&pe, 0, -1, -1, 0);
+    if (pc->fd == -1) {
+        fprintf(stderr, "Warning: Failed to open perf_event for CPU Instructions.\n");
+    }
+}
+
 // Resets and starts counting
 static inline void perf_start(PerfCounter* pc) {
     if (pc->fd == -1) return;

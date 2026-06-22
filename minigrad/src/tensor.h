@@ -73,7 +73,7 @@ class Tensor
 
         for (size_t i = 0; i < node->grad.size(); i++)
         {
-            node->grad[i] = 0.0f;
+            node->grad[i] = 1.0f;
         }
 
         for (auto it = topo.rbegin(); it != topo.rend(); it++)
@@ -413,5 +413,55 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
         }
     };
 
+    return out;
+}
+
+// applies rectified linear unit activation. max(0, x).
+inline Tensor relu(const Tensor& a)
+{
+    Tensor out(a.node->rows, a.node->cols);
+    for (size_t i = 0; i < a.node->data.size(); i++)
+    {
+        out.node->data[i] = std::max(0.0f, a.node->data[i]);
+    }
+
+    out.node->_prev = {a.node};
+    out.node->_backward = [a_node = a.node, out_node = out.node.get()]()
+    {
+        for (size_t i = 0; i < a_node->data.size(); i++)
+        {
+            a_node->grad[i] += out_node->grad[i] * (a_node->data[i] > 0 ? 1.0f : 0.0f);
+        }
+    };
+
+    return out;
+}
+
+// computes mean squared error loss. reduces to 1x1 scalar tensor.
+inline Tensor mse_loss(const Tensor& pred, const Tensor& target)
+{
+    assert(pred.node->rows == target.node->rows && pred.node->cols == target.node->cols);
+    Tensor out(1, 1);
+    float sum = 0.0f;
+    size_t n = pred.node->data.size();
+    
+    for (size_t i = 0; i < n; i++)
+    {
+        float diff = pred.node->data[i] - target.node->data[i];
+        sum += diff * diff;
+    }
+    out.node->data[0] = sum / n;
+    
+    out.node->_prev = {pred.node, target.node};
+    out.node->_backward = [pred_node = pred.node, target_node = target.node, out_node = out.node.get(), n]()
+    {
+        float grad_out = out_node->grad[0];
+        for (size_t i = 0; i < n; i++)
+        {
+            float diff = pred_node->data[i] - target_node->data[i];
+            pred_node->grad[i] += grad_out * (2.0f * diff / n);
+        }
+    };
+    
     return out;
 }
