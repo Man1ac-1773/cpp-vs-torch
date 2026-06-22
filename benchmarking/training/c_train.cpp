@@ -1,8 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include "./../macrograd/src/macrograd.h"
-#include "profiler.h"
+#include "../../macrograd/src/macrograd.h"
+#include "../common/profiler.h"
 
 using namespace std;
 

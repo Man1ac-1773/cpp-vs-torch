@@ -11,17 +11,17 @@ using namespace std;
 
 // Missing Multi-threaded Naive Implementation for C++
 ::Tensor matmul_naive_omp(const ::Tensor& a, const ::Tensor& b) {
-    ::Tensor out(a.rows, b.cols);
-    for(size_t i=0; i<out.rows*out.cols; i++) out.node->data[i] = 0.0f;
+    ::Tensor out(a.node->rows, b.node->cols);
+    for(size_t i=0; i<out.node->rows*out.node->cols; i++) out.node->data[i] = 0.0f;
     
     #pragma omp parallel for
-    for (size_t i = 0; i < a.rows; i++) {
-        for (size_t j = 0; j < b.cols; j++) {
+    for (size_t i = 0; i < a.node->rows; i++) {
+        for (size_t j = 0; j < b.node->cols; j++) {
             float sum = 0.0f;
-            for (size_t k = 0; k < a.cols; k++) {
-                sum += a.node->data[i * a.cols + k] * b.node->data[k * b.cols + j];
+            for (size_t k = 0; k < a.node->cols; k++) {
+                sum += a.node->data[i * a.node->cols + k] * b.node->data[k * b.node->cols + j];
             }
-            out.node->data[i * out.cols + j] = sum;
+            out.node->data[i * out.node->cols + j] = sum;
         }
     }
     return out;
@@ -29,21 +29,21 @@ using namespace std;
 
 // Missing Multi-threaded Tiled Implementation for C++
 ::Tensor matmul_tiled_omp(const ::Tensor& a, const ::Tensor& b) {
-    ::Tensor out(a.rows, b.cols);
-    for(size_t i=0; i<out.rows*out.cols; i++) out.node->data[i] = 0.0f;
+    ::Tensor out(a.node->rows, b.node->cols);
+    for(size_t i=0; i<out.node->rows*out.node->cols; i++) out.node->data[i] = 0.0f;
     
     size_t TILE_SIZE = 32;
     #pragma omp parallel for collapse(2)
-    for (size_t i = 0; i < a.rows; i += TILE_SIZE) {
-        for (size_t j = 0; j < b.cols; j += TILE_SIZE) {
-            for (size_t k = 0; k < a.cols; k += TILE_SIZE) {
-                for (size_t ii = i; ii < min(i + TILE_SIZE, (size_t)a.rows); ii++) {
-                    for (size_t jj = j; jj < min(j + TILE_SIZE, (size_t)b.cols); jj++) {
+    for (size_t i = 0; i < a.node->rows; i += TILE_SIZE) {
+        for (size_t j = 0; j < b.node->cols; j += TILE_SIZE) {
+            for (size_t k = 0; k < a.node->cols; k += TILE_SIZE) {
+                for (size_t ii = i; ii < min(i + TILE_SIZE, (size_t)a.node->rows); ii++) {
+                    for (size_t jj = j; jj < min(j + TILE_SIZE, (size_t)b.node->cols); jj++) {
                         float sum = 0.0f;
-                        for (size_t kk = k; kk < min(k + TILE_SIZE, (size_t)a.cols); kk++) {
-                            sum += a.node->data[ii * a.cols + kk] * b.node->data[kk * b.cols + jj];
+                        for (size_t kk = k; kk < min(k + TILE_SIZE, (size_t)a.node->cols); kk++) {
+                            sum += a.node->data[ii * a.node->cols + kk] * b.node->data[kk * b.node->cols + jj];
                         }
-                        out.node->data[ii * out.cols + jj] += sum;
+                        out.node->data[ii * out.node->cols + jj] += sum;
                     }
                 }
             }

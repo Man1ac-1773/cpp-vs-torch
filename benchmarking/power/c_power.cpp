@@ -1,9 +1,10 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include "./../macrograd/src/engine.h"
-#include "perf_profiler.h"
-#include "profiler.h"
+#include "../../macrograd/src/engine.h"
+#include "../common/perf_profiler.h"
+#include "../common/profiler.h"
+#include "../common/rapl.h"
 
 using namespace std;
 
@@ -25,6 +26,26 @@ double power_bench_c(uint N) {
     
     g_arena.top = checkpoint;
     return (end_energy - start_energy) / iterations;
+}
+
+static inline void load_mnist(const char* image_path, const char* label_path, Tensor* X, Tensor* Y) {
+    FILE* f_img = fopen(image_path, "rb");
+    if (f_img) {
+        size_t read = fread(X->data, sizeof(float), X->shape[0] * X->shape[1], f_img);
+        (void)read;
+        fclose(f_img);
+    } else {
+        fprintf(stderr, "Failed to load MNIST images.\n");
+    }
+
+    FILE* f_lbl = fopen(label_path, "rb");
+    if (f_lbl) {
+        size_t read = fread(Y->data, sizeof(float), Y->shape[0] * Y->shape[1], f_lbl);
+        (void)read;
+        fclose(f_lbl);
+    } else {
+        fprintf(stderr, "Failed to load MNIST labels.\n");
+    }
 }
 
 void run_mnist_power_bench(ofstream& json_out) {

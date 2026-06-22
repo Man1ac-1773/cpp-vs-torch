@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
-#include "./../macrograd/src/macrograd.h"
-#include "perf_profiler.h"
+#include "../../macrograd/src/macrograd.h"
+#include "../common/perf_profiler.h"
 
 using namespace std;
 
@@ -11,6 +11,11 @@ int main(int argc, char* argv[]) {
     
     string filepath = "./data/c_cache_" + mode + ".jsonl";
     ofstream json_out(filepath);
+
+    PerfCounter l1_counter;
+    PerfCounter instr_counter;
+    perf_init_l1_misses(&l1_counter);
+    perf_init_instructions(&instr_counter);
 
     cout << "Sweeping PMU metrics (N=10 to N=1000)..." << endl;
     

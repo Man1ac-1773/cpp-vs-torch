@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
-#include "./../minigrad/src/tensor.h"
-#include "perf_profiler.h"
+#include "../../minigrad/src/tensor.h"
+#include "../common/perf_profiler.h"
 
 using namespace std;
 

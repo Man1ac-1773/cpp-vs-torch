@@ -1,9 +1,10 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include "./../minigrad/src/engine.h"
-#include "perf_profiler.h"
-#include "profiler.h"
+#include "../../minigrad/src/engine.h"
+#include "../common/perf_profiler.h"
+#include "../common/profiler.h"
+#include "../common/rapl.h"
 
 using namespace std;
 
@@ -22,6 +23,26 @@ double power_bench_cpp(uint N) {
     double end_energy = get_rapl_energy_joules();
     
     return (end_energy - start_energy) / iterations;
+}
+
+static inline void load_mnist(const char* image_path, const char* label_path, Tensor& X, Tensor& Y) {
+    FILE* f_img = fopen(image_path, "rb");
+    if (f_img) {
+        size_t read = fread(X.node->data.data(), sizeof(float), X.node->rows * X.node->cols, f_img);
+        (void)read;
+        fclose(f_img);
+    } else {
+        std::cerr << "Failed to load MNIST images.\n";
+    }
+
+    FILE* f_lbl = fopen(label_path, "rb");
+    if (f_lbl) {
+        size_t read = fread(Y.node->data.data(), sizeof(float), Y.node->rows * Y.node->cols, f_lbl);
+        (void)read;
+        fclose(f_lbl);
+    } else {
+        std::cerr << "Failed to load MNIST labels.\n";
+    }
 }
 
 void run_mnist_power_bench(ofstream& json_out) {

@@ -1,8 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include "./../minigrad/src/tensor.h"
-#include "profiler.h"
+#include "../../minigrad/src/tensor.h"
+#include "../common/profiler.h"
 
 using namespace std;
 

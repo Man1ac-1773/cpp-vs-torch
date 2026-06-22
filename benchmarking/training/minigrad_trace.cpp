@@ -1,5 +1,5 @@
 #include <iostream>
-#include "./../minigrad/src/tensor.h"
+#include "../../minigrad/src/tensor.h"
 
 using namespace std;
 

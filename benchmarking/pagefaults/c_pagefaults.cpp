@@ -1,7 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <sys/resource.h>
-#include "./../macrograd/src/macrograd.h"
+#include "../../macrograd/src/macrograd.h"
 
 using namespace std;
 
