@@ -4,7 +4,7 @@
 #include <cstring>     // for memset
 #include <immintrin.h> // raw cpu instructions for SIMD
 
-#include "../../benchmarking/chrome_profiler.h"
+#include "../../benchmarking/common/chrome_profiler.h"
 #include "allocator.h"
 
 #define f32 float

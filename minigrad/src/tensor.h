@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "../../benchmarking/chrome_profiler.h"
+#include "../../benchmarking/common/chrome_profiler.h"
 
 using namespace std;
 
