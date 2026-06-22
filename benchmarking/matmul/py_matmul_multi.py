@@ -32,7 +32,8 @@ def run_multi_thread_sweep(filepath):
             f.write(json.dumps({
                 "benchmark": "matmul", "N": N, "kernel": "aten", 
                 "lang": "pytorch", "threads": threads, 
-                "avg_time": total_time/NUM_RUNS, "min_time": min_time
+                "avg_time": total_time/NUM_RUNS, "min_time": min_time,
+                "avg_cycles": 0, "min_cycles": 0
             }) + "\n")
             
             # --- Numpy ---
@@ -52,7 +53,8 @@ def run_multi_thread_sweep(filepath):
             f.write(json.dumps({
                 "benchmark": "matmul", "N": N, "kernel": "openblas/mkl", 
                 "lang": "numpy", "threads": threads, 
-                "avg_time": total_time/NUM_RUNS, "min_time": min_time
+                "avg_time": total_time/NUM_RUNS, "min_time": min_time,
+                "avg_cycles": 0, "min_cycles": 0
             }) + "\n")
 
             if step == 10 and N >= 100: step = 100

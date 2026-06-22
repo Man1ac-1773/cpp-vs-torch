@@ -5,8 +5,12 @@
 
 using namespace std;
 
-int main() {
-    ofstream json_out("./c-data/pagefaults_sweep.jsonl", ios::app);
+int main(int argc, char* argv[]) {
+    string mode = "performance-plugged";
+    if (argc > 1) mode = argv[1];
+    
+    string filepath = "./data/cpp_pagefaults_" + mode + ".jsonl";
+    ofstream json_out(filepath, ios::app);
     
     uint step = 10;
     for (size_t N = 10; N <= 2000; N += step) {

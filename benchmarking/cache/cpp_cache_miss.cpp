@@ -5,13 +5,17 @@
 
 using namespace std;
 
-int main() {
+int main(int argc, char* argv[]) {
+    string mode = "performance-plugged";
+    if (argc > 1) mode = argv[1];
+    
     PerfCounter l1_counter;
     PerfCounter instr_counter;
     perf_init_l1_misses(&l1_counter);
     perf_init_instructions(&instr_counter);
 
-    ofstream json_out("./data/cache_miss/cpp_cache_miss.jsonl");
+    string filepath = "./data/cpp_cache_" + mode + ".jsonl";
+    ofstream json_out(filepath);
 
     cout << "Sweeping PMU metrics for C++ Engine (N=10 to N=1000)..." << endl;
     
@@ -47,6 +51,6 @@ int main() {
     }
     
     json_out.close();
-    cout << "Done! Results saved to ./data/cache_miss/cpp_cache_miss.jsonl" << endl;
+    cout << "Done! Results saved to " << filepath << endl;
     return 0;
 }

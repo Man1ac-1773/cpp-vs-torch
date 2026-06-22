@@ -12,8 +12,12 @@ void sgd_step(Tensor& param, float lr) {
     }
 }
 
-int main() {
-    ofstream json_out("./cpp-data/train_results.jsonl");
+int main(int argc, char* argv[]) {
+    string mode = "performance-plugged";
+    if (argc > 1) mode = argv[1];
+    
+    string filepath = "./data/cpp_train_" + mode + ".jsonl";
+    ofstream json_out(filepath);
 
     uint BATCH_SIZE = 1024;
     uint INPUT_DIM = 128;

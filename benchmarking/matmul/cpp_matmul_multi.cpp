@@ -63,6 +63,8 @@ void run_multi_thread_sweep(ofstream& json_out)
     {
         double total_time = 0;
         double min_time = 1e9;
+        uint64_t total_cycles = 0;
+        uint64_t min_cycles = UINT64_MAX;
         
         ::Tensor A(N, N);
         ::Tensor B(N, N);
@@ -71,40 +73,55 @@ void run_multi_thread_sweep(ofstream& json_out)
         // 1. NAIVE OMP
         ::Tensor C_warmup = matmul_naive_omp(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {
+            uint64_t cycles = get_cpu_cycles();
             double start_time = get_wall_time();
             ::Tensor C_naive = matmul_naive_omp(A, B);
             double time_elapsed = (get_wall_time() - start_time);
+            cycles = (get_cpu_cycles() - cycles);
             min_time = min(min_time, time_elapsed);
             total_time += time_elapsed;
+            min_cycles = min(min_cycles, cycles);
+            total_cycles += cycles;
         }
         json_out << "{\"benchmark\": \"matmul\", \"N\": " << N
-                 << ", \"kernel\": \"naive\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time << "}\n";
+                 << ", \"kernel\": \"naive\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time 
+                 << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
         // 2. TILED OMP
-        total_time = 0; min_time = 1e9;
+        total_time = 0; min_time = 1e9; total_cycles = 0; min_cycles = UINT64_MAX;
         ::Tensor C_tiled_warmup = matmul_tiled_omp(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {
+            uint64_t cycles = get_cpu_cycles();
             double start_time = get_wall_time();
             ::Tensor C_tiled = matmul_tiled_omp(A, B);
             double time_elapsed = (get_wall_time() - start_time);
+            cycles = (get_cpu_cycles() - cycles);
             min_time = min(min_time, time_elapsed);
             total_time += time_elapsed;
+            min_cycles = min(min_cycles, cycles);
+            total_cycles += cycles;
         }
         json_out << "{\"benchmark\": \"matmul\", \"N\": " << N
-                 << ", \"kernel\": \"tiled\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time << "}\n";
+                 << ", \"kernel\": \"tiled\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time 
+                 << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
         // 3. SIMD MT (Minigrad's native pthread implementation)
-        total_time = 0; min_time = 1e9;
+        total_time = 0; min_time = 1e9; total_cycles = 0; min_cycles = UINT64_MAX;
         ::Tensor C_simd_warmup = matmul_simd_mt(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {
+            uint64_t cycles = get_cpu_cycles();
             double start_time = get_wall_time();
             ::Tensor C_simd = matmul_simd_mt(A, B);
             double time_elapsed = (get_wall_time() - start_time);
+            cycles = (get_cpu_cycles() - cycles);
             min_time = min(min_time, time_elapsed);
             total_time += time_elapsed;
+            min_cycles = min(min_cycles, cycles);
+            total_cycles += cycles;
         }
         json_out << "{\"benchmark\": \"matmul\", \"N\": " << N
-                 << ", \"kernel\": \"simd\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time << "}\n";
+                 << ", \"kernel\": \"simd\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time 
+                 << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
         if (step == 10 && N >= 100) step = 100;
         if (step == 100 && N >= 1000) step = 1000;

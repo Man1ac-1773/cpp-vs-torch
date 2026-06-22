@@ -5,13 +5,12 @@
 
 using namespace std;
 
-int main() {
-    PerfCounter l1_counter;
-    PerfCounter instr_counter;
-    perf_init_l1_misses(&l1_counter);
-    perf_init_instructions(&instr_counter);
-
-    ofstream json_out("./c-data/pmu_metrics.jsonl");
+int main(int argc, char* argv[]) {
+    string mode = "performance-plugged";
+    if (argc > 1) mode = argv[1];
+    
+    string filepath = "./data/c_cache_" + mode + ".jsonl";
+    ofstream json_out(filepath);
 
     cout << "Sweeping PMU metrics (N=10 to N=1000)..." << endl;
     
@@ -63,6 +62,6 @@ int main() {
     }
     
     json_out.close();
-    cout << "Done! Results saved to ./c-data/pmu_metrics.jsonl" << endl;
+    cout << "Done! Results saved to " << filepath << endl;
     return 0;
 }

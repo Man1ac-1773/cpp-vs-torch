@@ -1,6 +1,10 @@
 import torch
 import time
 import json
+import sys
+
+mode = sys.argv[1] if len(sys.argv) > 1 else "performance-plugged"
+filepath = f"./data/py_train_{mode}.jsonl"
 
 BATCH_SIZE = 1024
 INPUT_DIM = 128
@@ -22,7 +26,7 @@ loss_fn = torch.nn.MSELoss()
 
 total_time = 0
 
-with open('./py-data/train_results.jsonl', 'w') as f:
+with open(filepath, 'w') as f:
     for epoch in range(EPOCHS):
         start_time = time.time()
         
