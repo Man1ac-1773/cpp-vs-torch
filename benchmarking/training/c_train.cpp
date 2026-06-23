@@ -1,8 +1,10 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <cstdlib>
 #include "../../macrograd/src/macrograd.h"
 #include "../common/profiler.h"
+#include "../common/rapl.h"
 
 using namespace std;
 
@@ -28,62 +30,68 @@ int main(int argc, char* argv[]) {
 
     cout << "Training 2-Layer MLP on C Engine (Batch=" << BATCH_SIZE << ")..." << endl;
 
-    g_arena.top = 0; // init
-    
-    // Allocate Inputs and Targets
-    Tensor* X = new_tensor(BATCH_SIZE, INPUT_DIM);
-    Tensor* Y = new_tensor(BATCH_SIZE, OUTPUT_DIM);
-    for (uint i = 0; i < BATCH_SIZE * INPUT_DIM; i++) X->data[i] = 0.5f;
-    for (uint i = 0; i < BATCH_SIZE * OUTPUT_DIM; i++) Y->data[i] = 0.1f;
+    typedef Tensor* (*MatmulFunc)(Tensor*, Tensor*);
+    MatmulFunc backends[] = {tensor_matmul_naive, tensor_matmul_tiled, tensor_matmul_simd_mt};
+    string backend_names[] = {"naive", "tiled", "simd"};
 
-    // Allocate Weights
-    Tensor* W1 = new_tensor(INPUT_DIM, HIDDEN_DIM);
-    Tensor* W2 = new_tensor(HIDDEN_DIM, OUTPUT_DIM);
-    for (uint i = 0; i < INPUT_DIM * HIDDEN_DIM; i++) W1->data[i] = 0.01f;
-    for (uint i = 0; i < HIDDEN_DIM * OUTPUT_DIM; i++) W2->data[i] = -0.01f;
+    for (int b = 0; b < 3; b++) {
+        MatmulFunc matmul = backends[b];
+        string backend_name = backend_names[b];
+        
+        cout << "\n--- Backend: " << backend_name << " ---" << endl;
 
-    // CHECKPOINT THE ARENA
-    // This allows us to keep X, Y, W1, W2 in memory, but discard all 
-    // intermediate activations (forward pass artifacts) at the end of each epoch!
-    size_t arena_checkpoint = g_arena.top;
+        g_arena.top = 0; // init
+        
+        Tensor* X = new_tensor(BATCH_SIZE, INPUT_DIM);
+        Tensor* Y = new_tensor(BATCH_SIZE, OUTPUT_DIM);
+        for (uint i = 0; i < BATCH_SIZE * INPUT_DIM; i++) X->data[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        for (uint i = 0; i < BATCH_SIZE * OUTPUT_DIM; i++) Y->data[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
 
-    double total_time = 0;
+        Tensor* W1 = new_tensor(INPUT_DIM, HIDDEN_DIM);
+        Tensor* W2 = new_tensor(HIDDEN_DIM, OUTPUT_DIM);
+        for (uint i = 0; i < INPUT_DIM * HIDDEN_DIM; i++) W1->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
+        for (uint i = 0; i < HIDDEN_DIM * OUTPUT_DIM; i++) W2->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
 
-    for (uint epoch = 0; epoch < EPOCHS; epoch++) {
-        double start_time = get_wall_time();
+        size_t arena_checkpoint = g_arena.top;
 
-        // 1. Forward Pass (uses SIMD MT)
-        Tensor* h1 = tensor_matmul_simd_mt(X, W1);
-        Tensor* a1 = tensor_relu(h1);
-        Tensor* pred = tensor_matmul_simd_mt(a1, W2);
+        double total_time = 0;
+        double start_energy = get_rapl_energy_joules();
 
-        // 2. Loss
-        Tensor* loss = tensor_mse_loss(pred, Y);
-        float loss_val = loss->data[0];
+        for (uint epoch = 0; epoch < EPOCHS; epoch++) {
+            double start_time = get_wall_time();
 
-        // 3. Backward Pass
-        backwardPass(loss);
+            Tensor* h1 = matmul(X, W1);
+            Tensor* a1 = tensor_relu(h1);
+            Tensor* pred = matmul(a1, W2);
 
-        // 4. Optimizer Step
-        sgd_step(W1, LR);
-        sgd_step(W2, LR);
+            Tensor* loss = tensor_mse_loss(pred, Y);
+            float loss_val = loss->data[0];
 
-        double epoch_time = get_wall_time() - start_time;
-        total_time += epoch_time;
+            backwardPass(loss);
 
-        if (epoch % 10 == 0) {
-            cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Time: " << epoch_time << "s" << endl;
+            sgd_step(W1, LR);
+            sgd_step(W2, LR);
+
+            double epoch_time = get_wall_time() - start_time;
+            total_time += epoch_time;
+
+            if (epoch % 10 == 0) {
+                cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Time: " << epoch_time << "s" << endl;
+            }
+
+            g_arena.top = arena_checkpoint;
         }
 
-        json_out << "{\"engine\": \"C (macrograd)\", \"epoch\": " << epoch << ", \"loss\": " << loss_val << ", \"time\": " << epoch_time << "}\n";
+        double end_energy = get_rapl_energy_joules();
+        double energy_joules = end_energy - start_energy;
 
-        // 5. Memory Management: Pop Arena back to Checkpoint!
-        // This is the genius of the bump allocator for ML training loops.
-        // We instantly free `h1`, `a1`, `pred`, and `loss` in 0(1) time without Page Faults.
-        g_arena.top = arena_checkpoint;
+        cout << "Total Training Time (" << backend_name << "): " << total_time << "s | Energy: " << energy_joules << "J" << endl;
+        
+        json_out << "{\"task\": \"dummy_mlp\", \"engine\": \"C\", \"backend\": \"" << backend_name 
+                 << "\", \"total_time\": " << total_time << ", \"avg_epoch_time\": " << (total_time / EPOCHS)
+                 << ", \"energy_joules\": " << energy_joules << "}\n";
     }
 
-    cout << "Total Training Time (C Engine): " << total_time << "s" << endl;
     json_out.close();
     return 0;
 }

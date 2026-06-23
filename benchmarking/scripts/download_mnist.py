@@ -10,19 +10,30 @@ data_dir = repo_root / "resources" / "data"
 
 os.makedirs(data_dir, exist_ok=True)
 
-print("Downloading MNIST...")
+print("Downloading MNIST Train...")
 dataset = datasets.MNIST(str(data_dir), download=True, train=True)
+
+print("Downloading MNIST Test...")
+test_dataset = datasets.MNIST(str(data_dir), download=True, train=False)
 
 print("Flattening and normalizing...")
 X = dataset.data.numpy().reshape(-1, 28*28).astype(np.float32) / 255.0
 Y_labels = dataset.targets.numpy()
 
+X_test = test_dataset.data.numpy().reshape(-1, 28*28).astype(np.float32) / 255.0
+Y_test_labels = test_dataset.targets.numpy()
+
 print("One-hot encoding labels...")
 Y = np.zeros((len(Y_labels), 10), dtype=np.float32)
 Y[np.arange(len(Y_labels)), Y_labels] = 1.0
 
+Y_test = np.zeros((len(Y_test_labels), 10), dtype=np.float32)
+Y_test[np.arange(len(Y_test_labels)), Y_test_labels] = 1.0
+
 print("Dumping to binary files for C/C++ engines...")
 X.tofile(data_dir / 'train_images.bin')
 Y.tofile(data_dir / 'train_labels.bin')
+X_test.tofile(data_dir / 'test_images.bin')
+Y_test.tofile(data_dir / 'test_labels.bin')
 
-print(f"Successfully dumped {X.shape} images and {Y.shape} labels to {data_dir}/")
+print(f"Successfully dumped {X.shape} train images and {X_test.shape} test images to {data_dir}/")

@@ -1,16 +1,15 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
-#include "../../minigrad/src/tensor.h"
+#include <cstdlib>
+#include "../../minigrad/src/engine.h"
 #include "../common/profiler.h"
+#include "../common/rapl.h"
 
 using namespace std;
 
-void sgd_step(Tensor& param, float lr) {
-    for (size_t i = 0; i < param.node->data.size(); i++) {
-        param.node->data[i] -= lr * param.node->grad[i];
-    }
-}
+// Define the global matmul backend for minigrad
+MatmulBackend g_matmul_backend = MATMUL_SIMD;
 
 int main(int argc, char* argv[]) {
     string mode = "performance-plugged";
@@ -28,48 +27,65 @@ int main(int argc, char* argv[]) {
 
     cout << "Training 2-Layer MLP on C++ Engine (Batch=" << BATCH_SIZE << ")..." << endl;
 
-    Tensor X(BATCH_SIZE, INPUT_DIM);
-    Tensor Y(BATCH_SIZE, OUTPUT_DIM);
-    for (size_t i = 0; i < BATCH_SIZE * INPUT_DIM; i++) X.node->data[i] = 0.5f;
-    for (size_t i = 0; i < BATCH_SIZE * OUTPUT_DIM; i++) Y.node->data[i] = 0.1f;
+    MatmulBackend backends[] = {MATMUL_NAIVE, MATMUL_TILED, MATMUL_SIMD};
+    string backend_names[] = {"naive", "tiled", "simd"};
 
-    Tensor W1(INPUT_DIM, HIDDEN_DIM);
-    Tensor W2(HIDDEN_DIM, OUTPUT_DIM);
-    for (size_t i = 0; i < INPUT_DIM * HIDDEN_DIM; i++) W1.node->data[i] = 0.01f;
-    for (size_t i = 0; i < HIDDEN_DIM * OUTPUT_DIM; i++) W2.node->data[i] = -0.01f;
+    for (int b = 0; b < 3; b++) {
+        g_matmul_backend = backends[b];
+        string backend_name = backend_names[b];
+        
+        cout << "\n--- Backend: " << backend_name << " ---" << endl;
 
-    double total_time = 0;
+        Tensor X(BATCH_SIZE, INPUT_DIM);
+        Tensor Y(BATCH_SIZE, OUTPUT_DIM);
+        for (uint i = 0; i < BATCH_SIZE * INPUT_DIM; i++) X.node->data[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        for (uint i = 0; i < BATCH_SIZE * OUTPUT_DIM; i++) Y.node->data[i] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
 
-    for (uint epoch = 0; epoch < EPOCHS; epoch++) {
-        double start_time = get_wall_time();
+        MLP model(INPUT_DIM, HIDDEN_DIM, OUTPUT_DIM);
+        for (uint i = 0; i < INPUT_DIM * HIDDEN_DIM; i++) model.fc1.weight.node->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
+        for (uint i = 0; i < HIDDEN_DIM * OUTPUT_DIM; i++) model.fc2.weight.node->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
 
-        // 1. Forward Pass
-        Tensor h1 = matmul_simd_mt(X, W1);
-        Tensor a1 = relu(h1);
-        Tensor pred = matmul_simd_mt(a1, W2);
+        SGD optimizer(model.parameters(), LR);
 
-        // 2. Loss
-        Tensor loss = mse_loss(pred, Y);
-        float loss_val = loss.node->data[0];
+        double total_time = 0;
+        double start_energy = get_rapl_energy_joules();
 
-        // 3. Backward Pass
-        loss.backward();
+        for (uint epoch = 0; epoch < EPOCHS; epoch++) {
+            double start_time = get_wall_time();
 
-        // 4. Optimizer Step
-        sgd_step(W1, LR);
-        sgd_step(W2, LR);
+            Tensor pred = model.forward(X);
+            Tensor loss = mse_loss(pred, Y);
+            float loss_val = loss.node->data[0];
 
-        double epoch_time = get_wall_time() - start_time;
-        total_time += epoch_time;
+            loss.backward();
+            optimizer.step();
 
-        if (epoch % 10 == 0) {
-            cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Time: " << epoch_time << "s" << endl;
+            double epoch_time = get_wall_time() - start_time;
+            total_time += epoch_time;
+
+            if (epoch % 10 == 0) {
+                cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Time: " << epoch_time << "s" << endl;
+            }
+            
+            // Re-allocate computation graph nodes to simulate zeroing grad
+            // Actually, Minigrad's C++ relies on RAII and scope to destroy the graph!
+            // But we created pred, loss inside the loop, so they will be destroyed properly
+            // However, model weights accumulate gradients! We must zero them out.
+            for (auto p : model.parameters()) {
+                std::fill(p->node->grad.begin(), p->node->grad.end(), 0.0f);
+            }
         }
 
-        json_out << "{\"engine\": \"C++ (minigrad)\", \"epoch\": " << epoch << ", \"loss\": " << loss_val << ", \"time\": " << epoch_time << "}\n";
+        double end_energy = get_rapl_energy_joules();
+        double energy_joules = end_energy - start_energy;
+
+        cout << "Total Training Time (" << backend_name << "): " << total_time << "s | Energy: " << energy_joules << "J" << endl;
+        
+        json_out << "{\"task\": \"dummy_mlp\", \"engine\": \"C++\", \"backend\": \"" << backend_name 
+                 << "\", \"total_time\": " << total_time << ", \"avg_epoch_time\": " << (total_time / EPOCHS)
+                 << ", \"energy_joules\": " << energy_joules << "}\n";
     }
 
-    cout << "Total Training Time (C++ Engine): " << total_time << "s" << endl;
     json_out.close();
     return 0;
 }
