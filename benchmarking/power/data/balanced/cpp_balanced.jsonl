@@ -1,0 +1,20 @@
+{"task": "matmul", "N": 10, "engine": "minigrad", "energy_joules": 1.947e-05}
+{"task": "matmul", "N": 20, "engine": "minigrad", "energy_joules": 8.783e-05}
+{"task": "matmul", "N": 30, "engine": "minigrad", "energy_joules": 0.00022705}
+{"task": "matmul", "N": 40, "engine": "minigrad", "energy_joules": 0.000201171}
+{"task": "matmul", "N": 50, "engine": "minigrad", "energy_joules": 0.000526793}
+{"task": "matmul", "N": 60, "engine": "minigrad", "energy_joules": 0.000733885}
+{"task": "matmul", "N": 70, "engine": "minigrad", "energy_joules": 0.00117871}
+{"task": "matmul", "N": 80, "engine": "minigrad", "energy_joules": 0.0012998}
+{"task": "matmul", "N": 90, "engine": "minigrad", "energy_joules": 0.00225567}
+{"task": "matmul", "N": 100, "engine": "minigrad", "energy_joules": 0.0029431}
+{"task": "matmul", "N": 200, "engine": "minigrad", "energy_joules": 0.0244909}
+{"task": "matmul", "N": 300, "engine": "minigrad", "energy_joules": 0.0849131}
+{"task": "matmul", "N": 400, "engine": "minigrad", "energy_joules": 0.189886}
+{"task": "matmul", "N": 500, "engine": "minigrad", "energy_joules": 0.404064}
+{"task": "matmul", "N": 600, "engine": "minigrad", "energy_joules": 0.721812}
+{"task": "matmul", "N": 700, "engine": "minigrad", "energy_joules": 1.125}
+{"task": "matmul", "N": 800, "engine": "minigrad", "energy_joules": 1.60427}
+{"task": "matmul", "N": 900, "engine": "minigrad", "energy_joules": 2.24406}
+{"task": "matmul", "N": 1000, "engine": "minigrad", "energy_joules": 3.03128}
+{"task": "mnist_epoch", "engine": "minigrad", "energy_joules": 121.232}
