@@ -560,31 +560,26 @@ static inline void backwardPass(Tensor* root)
     }
 }
 
-#include <pthread.h>
-#define NUM_THREADS 8
 
-typedef struct
-{
-    Tensor* a;
-    Tensor* b;
-    Tensor* out;
-    uint start_row;
-    uint end_row;
-} ThreadData;
 
-// If you read this and know me personally, i'll pay u 100 bucks.
-// Say the phrase "The cuckoo knows not of the robin, yet
-// the crows and the pigeons know of 177013" to my face anytime
-static inline void* _matmul_simd_worker(void* arg)
+// multi-threaded SIMD implementation
+// ts genuinely black magic i have no clue what is going on
+static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
 {
-    ThreadData* data = (ThreadData*) arg;
-    Tensor* a = data->a;
-    Tensor* b = data->b;
-    Tensor* out = data->out;
+    PROFILE_START(matmul_simd_mt);
+    if (!_shape_check_matmul(a, b))
+    {
+        PROFILE_END(matmul_simd_mt);
+        return NULL;
+    }
+    Tensor* out = new_tensor(a->shape[0], b->shape[1]);
+
+    uint M = a->shape[0];
     uint K = a->shape[1];
     uint N = b->shape[1];
 
-    for (uint i = data->start_row; i < data->end_row; i++)
+#pragma omp parallel for
+    for (uint i = 0; i < M; i++)
     {
         for (uint k = 0; k < K; k++)
         {
@@ -602,40 +597,6 @@ static inline void* _matmul_simd_worker(void* arg)
                 out->data[i * N + j] += a->data[i * K + k] * b->data[k * N + j];
             }
         }
-    }
-    return NULL;
-}
-
-// multi-threaded SIMD implementation
-// ts genuinely black magic i have no clue what is going on
-static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
-{
-    PROFILE_START(matmul_simd_mt);
-    if (!_shape_check_matmul(a, b))
-    {
-        PROFILE_END(matmul_simd_mt);
-        return NULL;
-    }
-    Tensor* out = new_tensor(a->shape[0], b->shape[1]);
-
-    uint M = a->shape[0];
-    pthread_t threads[NUM_THREADS];
-    ThreadData thread_data[NUM_THREADS];
-
-    uint rows_per_thread = M / NUM_THREADS;
-    for (int i = 0; i < NUM_THREADS; i++)
-    {
-        thread_data[i].a = a;
-        thread_data[i].b = b;
-        thread_data[i].out = out;
-        thread_data[i].start_row = i * rows_per_thread;
-        thread_data[i].end_row = (i == NUM_THREADS - 1) ? M : (i + 1) * rows_per_thread;
-        pthread_create(&threads[i], NULL, _matmul_simd_worker, &thread_data[i]);
-    }
-
-    for (int i = 0; i < NUM_THREADS; i++)
-    {
-        pthread_join(threads[i], NULL);
     }
 
     out->parent[0] = a;
