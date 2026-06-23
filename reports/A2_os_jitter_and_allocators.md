@@ -1,4 +1,4 @@
-# 03. OS Jitter and Allocators
+# A2. OS Jitter and Allocators
 
 After tiling, I went full low-level and replaced the standard math operations with Advanced Vector Extensions (AVX) SIMD intrinsics. 
 

@@ -1,0 +1,1 @@
+{"task": "mnist_mlp", "engine": "numpy", "backend": "openblas", "total_time": 1.1530909538269043, "avg_epoch_time": 0.11530909538269044, "energy_joules": 122.78252299999986, "test_acc": 0.9047}

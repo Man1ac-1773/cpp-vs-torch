@@ -1,0 +1,1 @@
+{"task": "mnist_mlp", "engine": "pytorch", "backend": "aten", "total_time": 3.052776575088501, "avg_epoch_time": 0.3052776575088501, "energy_joules": 132.67580700000144, "test_acc": 0.9013}

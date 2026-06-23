@@ -1,6 +1,6 @@
-# Diagnosing Erratic Single-Threaded Execution Times
+# 05. Diagnosing Erratic Single-Threaded Execution Times
 
-During our final deep learning benchmarks, we observed a bizarre phenomenon in the `naive` and `tiled` C engine backends. Even though the mathematical workload per epoch was perfectly identical, the execution time would wildly fluctuate:
+During my final deep learning benchmarks, I observed a bizarre phenomenon in the `naive` and `tiled` C engine backends. Even though the mathematical workload per epoch was perfectly identical, the execution time would wildly fluctuate:
 
 ```text
 --- Backend: naive ---
@@ -12,9 +12,33 @@ Epoch 4 | Avg Loss: 0.569836 | Compute Time: 12.2163s
 Epoch 5 | Avg Loss: 0.489635 | Compute Time: 7.75477s
 ```
 
+This exact same pattern persists in the C++ engine (`minigrad`), affecting both the `naive` and `tiled` backends, showcasing that it is not a language-specific implementation flaw, but a hardware/OS level phenomenon:
+
+```text
+--- C++ Backend: naive ---
+Epoch 0 | Avg Loss: 2.27924 | Compute Time: 6.48281s
+Epoch 1 | Avg Loss: 2.01334 | Compute Time: 20.5384s <-- 20s jump!
+Epoch 2 | Avg Loss: 1.15308 | Compute Time: 3.45021s
+Epoch 3 | Avg Loss: 0.722964 | Compute Time: 12.6251s
+Epoch 4 | Avg Loss: 0.569836 | Compute Time: 7.98907s
+Epoch 5 | Avg Loss: 0.489635 | Compute Time: 22.8296s <-- 22s jump!
+Epoch 6 | Avg Loss: 0.441014 | Compute Time: 21.1294s
+Epoch 7 | Avg Loss: 0.408723 | Compute Time: 1.01255s <-- Back down to 1s
+Epoch 8 | Avg Loss: 0.385323 | Compute Time: 1.0073s
+
+--- C++ Backend: tiled ---
+Epoch 0 | Avg Loss: 2.22586 | Compute Time: 1.45381s
+Epoch 1 | Avg Loss: 1.61147 | Compute Time: 12.5986s <-- 12s jump!
+Epoch 2 | Avg Loss: 0.850072 | Compute Time: 5.40516s
+Epoch 3 | Avg Loss: 0.609395 | Compute Time: 6.93353s
+Epoch 4 | Avg Loss: 0.503244 | Compute Time: 8.35778s
+Epoch 5 | Avg Loss: 0.445733 | Compute Time: 1.45313s <-- Fast again!
+Epoch 6 | Avg Loss: 0.409905 | Compute Time: 4.44295s
+```
+
 Meanwhile, the OpenMP `simd` backend ran at a perfectly consistent `~0.21s` per epoch.
 
-Why did our single-threaded C engine randomly take **18x longer** on some epochs? In systems programming on modern laptops, this is almost always caused by three hardware/OS factors:
+Why did my single-threaded C engine randomly take **18x longer** on some epochs? In systems programming on modern laptops, this is almost always caused by three hardware/OS factors:
 
 ## 1. The Thermal Throttling Cycle
 Modern laptop CPUs have extremely aggressive thermal envelopes. 

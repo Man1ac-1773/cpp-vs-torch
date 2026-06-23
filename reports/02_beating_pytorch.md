@@ -1,6 +1,10 @@
-# 04. Beating PyTorch
+# 02. Beating PyTorch
 
-Even after perfectly tuning memory access with Tiling and bypassing the compiler with AVX SIMD intrinsics, PyTorch was still destroying my custom engines. 
+Before tackling PyTorch, I needed to ensure my single-threaded math was actually optimal. I implemented two massive low-level optimizations:
+1. **Cache Tiling**: Blocking matrices into 32x32 chunks to perfectly fit the CPU's L1 cache. *(Deep Dive: [A1. Cache Misses & Tiling](A1_cache_misses_and_tiling.md))*
+2. **AVX SIMD Intrinsics**: Bypassing the compiler to execute 8 math operations per clock cycle. *(Deep Dive: [A2. OS Jitter & Allocators](A2_os_jitter_and_allocators.md))*
+
+Even after perfectly tuning memory access with Tiling and utilizing AVX SIMD intrinsics, PyTorch was still destroying my custom engines. 
 
 PyTorch finished the N=2000 benchmark in 0.23 seconds, while my highly-optimized single-threaded C kernel took 1.78 seconds. The reason was simple: PyTorch leverages all 16 hardware cores of my laptop by default, while my engine was restricted to a single core. 
 

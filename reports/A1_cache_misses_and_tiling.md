@@ -1,4 +1,4 @@
-# 02. Cache Misses and Tiling
+# A1. Cache Misses and Tiling
 
 To fix the 17-second disaster from the naive implementation, I implemented Matrix Tiling (also known as Loop Blocking). 
 
