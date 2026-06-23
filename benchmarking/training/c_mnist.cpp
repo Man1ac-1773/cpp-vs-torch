@@ -68,8 +68,9 @@ int main(int argc, char* argv[]) {
     uint HIDDEN1 = 64;
     uint HIDDEN2 = 32;
     uint OUTPUT_DIM = 10;
-    uint EPOCHS = 5; // MNIST full batch takes a long time
-    float LR = 0.5f;
+    uint EPOCHS = 10;
+    uint BATCH_SIZE = 128;
+    float LR = 0.01f;
 
     cout << "Training MNIST 3-Layer MLP on C Engine..." << endl;
 
@@ -101,29 +102,42 @@ int main(int argc, char* argv[]) {
         Tensor* params[] = {model.fc1.weight, model.fc2.weight, model.fc3.weight};
         SGD opt = sgd_init(params, 3, LR);
 
+        Tensor* X_batch = new_tensor(BATCH_SIZE, INPUT_DIM);
+        Tensor* Y_batch = new_tensor(BATCH_SIZE, OUTPUT_DIM);
+        uint NUM_BATCHES = TRAIN_SIZE / BATCH_SIZE;
+
         size_t arena_checkpoint = g_arena.top;
 
         double total_time = 0;
         double start_energy = get_rapl_energy_joules();
 
         for (uint epoch = 0; epoch < EPOCHS; epoch++) {
-            double start_time = get_wall_time();
+            double epoch_time = 0;
+            float total_loss = 0.0f;
 
-            Tensor* pred = mlp3_forward(&model, X_train);
-            Tensor* loss = tensor_cross_entropy_loss(pred, Y_train);
-            float loss_val = loss->data[0];
+            for (uint b = 0; b < NUM_BATCHES; b++) {
+                memcpy(X_batch->data, X_train->data + b * BATCH_SIZE * INPUT_DIM, BATCH_SIZE * INPUT_DIM * sizeof(float));
+                memcpy(Y_batch->data, Y_train->data + b * BATCH_SIZE * OUTPUT_DIM, BATCH_SIZE * OUTPUT_DIM * sizeof(float));
 
-            backwardPass(loss);
-            sgd_step(&opt);
+                double start_time = get_wall_time();
 
-            double epoch_time = get_wall_time() - start_time;
+                Tensor* pred = mlp3_forward(&model, X_batch);
+                Tensor* loss = tensor_cross_entropy_loss(pred, Y_batch);
+                float loss_val = loss->data[0];
+
+                backwardPass(loss);
+                sgd_step(&opt);
+
+                epoch_time += get_wall_time() - start_time;
+                total_loss += loss_val;
+
+                sgd_zero_grad(&opt);
+
+                g_arena.top = arena_checkpoint;
+            }
+
+            cout << "Epoch " << epoch << " | Avg Loss: " << (total_loss / NUM_BATCHES) << " | Compute Time: " << epoch_time << "s" << endl;
             total_time += epoch_time;
-
-            float train_acc = compute_accuracy(pred, Y_train);
-
-            cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Train Acc: " << (train_acc * 100.0f) << "% | Time: " << epoch_time << "s" << endl;
-
-            g_arena.top = arena_checkpoint;
         }
 
         // Test Evaluation

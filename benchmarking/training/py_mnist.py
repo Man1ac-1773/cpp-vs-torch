@@ -43,8 +43,9 @@ def main():
     HIDDEN1 = 64
     HIDDEN2 = 32
     OUTPUT_DIM = 10
-    EPOCHS = 5
-    LR = 0.5
+    EPOCHS = 10
+    BATCH_SIZE = 128
+    LR = 0.01
 
     print("Training MNIST 3-Layer MLP on PyTorch Engine...")
 
@@ -77,22 +78,32 @@ def main():
     total_time = 0.0
     start_energy = get_rapl_energy_joules()
 
+    NUM_BATCHES = TRAIN_SIZE // BATCH_SIZE
+
     for epoch in range(EPOCHS):
-        start_time = time.time()
+        epoch_time = 0.0
+        total_loss = 0.0
 
-        pred = model(X_train)
-        loss = criterion(pred, Y_train_idx)
+        for b in range(NUM_BATCHES):
+            start_idx = b * BATCH_SIZE
+            end_idx = start_idx + BATCH_SIZE
+            X_batch = X_train[start_idx:end_idx]
+            Y_batch_idx = Y_train_idx[start_idx:end_idx]
 
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            start_time = time.time()
 
-        epoch_time = time.time() - start_time
+            pred = model(X_batch)
+            loss = criterion(pred, Y_batch_idx)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            epoch_time += time.time() - start_time
+            total_loss += loss.item()
+
+        print(f"Epoch {epoch} | Avg Loss: {total_loss / NUM_BATCHES:.6f} | Compute Time: {epoch_time:.6f}s")
         total_time += epoch_time
-
-        train_acc = compute_accuracy(pred, Y_train)
-
-        print(f"Epoch {epoch} | Loss: {loss.item():.6f} | Train Acc: {train_acc * 100:.2f}% | Time: {epoch_time:.6f}s")
 
     with torch.no_grad():
         test_pred = model(X_test)

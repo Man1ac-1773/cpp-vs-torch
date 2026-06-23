@@ -79,6 +79,9 @@ int main(int argc, char* argv[]) {
                 cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Time: " << epoch_time << "s" << endl;
             }
 
+            memset(W1->grad, 0, W1->shape[0] * W1->shape[1] * sizeof(float));
+            memset(W2->grad, 0, W2->shape[0] * W2->shape[1] * sizeof(float));
+
             g_arena.top = arena_checkpoint;
         }
 

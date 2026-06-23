@@ -70,8 +70,9 @@ int main(int argc, char* argv[]) {
     uint HIDDEN1 = 64;
     uint HIDDEN2 = 32;
     uint OUTPUT_DIM = 10;
-    uint EPOCHS = 5; 
-    float LR = 0.5f;
+    uint EPOCHS = 10; 
+    uint BATCH_SIZE = 128;
+    float LR = 0.01f;
 
     cout << "Training MNIST 3-Layer MLP on C++ Engine..." << endl;
 
@@ -99,29 +100,42 @@ int main(int argc, char* argv[]) {
 
         SGD optimizer(model.parameters(), LR);
 
+        Tensor X_batch(BATCH_SIZE, INPUT_DIM);
+        Tensor Y_batch(BATCH_SIZE, OUTPUT_DIM);
+        uint NUM_BATCHES = TRAIN_SIZE / BATCH_SIZE;
+
         double total_time = 0;
         double start_energy = get_rapl_energy_joules();
 
         for (uint epoch = 0; epoch < EPOCHS; epoch++) {
-            double start_time = get_wall_time();
+            double epoch_time = 0;
+            float total_loss = 0.0f;
 
-            Tensor pred = model.forward(X_train);
-            Tensor loss = cross_entropy_loss(pred, Y_train);
-            float loss_val = loss.node->data[0];
+            for (uint b = 0; b < NUM_BATCHES; b++) {
+                std::copy(X_train.node->data.begin() + b * BATCH_SIZE * INPUT_DIM, 
+                          X_train.node->data.begin() + (b + 1) * BATCH_SIZE * INPUT_DIM, 
+                          X_batch.node->data.begin());
+                std::copy(Y_train.node->data.begin() + b * BATCH_SIZE * OUTPUT_DIM, 
+                          Y_train.node->data.begin() + (b + 1) * BATCH_SIZE * OUTPUT_DIM, 
+                          Y_batch.node->data.begin());
 
-            loss.backward();
-            optimizer.step();
+                double start_time = get_wall_time();
 
-            double epoch_time = get_wall_time() - start_time;
-            total_time += epoch_time;
+                Tensor pred = model.forward(X_batch);
+                Tensor loss = cross_entropy_loss(pred, Y_batch);
+                float loss_val = loss.node->data[0];
 
-            float train_acc = compute_accuracy(pred, Y_train);
+                loss.backward();
+                optimizer.step();
 
-            cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Train Acc: " << (train_acc * 100.0f) << "% | Time: " << epoch_time << "s" << endl;
+                epoch_time += get_wall_time() - start_time;
+                total_loss += loss_val;
 
-            for (auto p : model.parameters()) {
-                std::fill(p->node->grad.begin(), p->node->grad.end(), 0.0f);
+                optimizer.zero_grad();
             }
+
+            cout << "Epoch " << epoch << " | Avg Loss: " << (total_loss / NUM_BATCHES) << " | Compute Time: " << epoch_time << "s" << endl;
+            total_time += epoch_time;
         }
 
         // Test Evaluation

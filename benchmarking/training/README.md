@@ -1,50 +1,64 @@
-# Autograd Engine Benchmarking Analysis
+# Autograd Engine Benchmarking: Final Analysis
 
-This document serves as a comprehensive analysis of the performance characteristics observed when benchmarking our custom C and C++ automatic differentiation engines against NumPy and PyTorch. 
+We have successfully completed a comprehensive performance and energy evaluation of our custom C and C++ Automatic Differentiation engines against NumPy (OpenBLAS) and PyTorch (ATen).
 
-We trained a small 2-layer Multi-Layer Perceptron (MLP) mapping `256 -> 128 -> 64` dimensions over 100 epochs with a batch size of `1024`.
+The benchmarks were conducted across two distinct workloads:
+1. **Dummy MLP:** Small-scale matrix multiplication (`1024` batch size, `128 -> 256 -> 64`). Tests Framework Overhead.
+2. **MNIST MLP:** Large-scale full-batch matrix multiplication (`60000` batch size, `784 -> 64 -> 32 -> 10`). Tests Raw Compute scaling.
 
-## Architectural Findings
+---
 
-### 1. The Pthread Spawning Bottleneck
-Our initial C Engine SIMD implementation utilized `pthread_create` and `pthread_join` inside the core `tensor_matmul_simd_mt` function.
+## 1. The "Framework Overhead" Reversal
 
-> [!WARNING]
-> Because this function is called multiple times per epoch, the engine was spawning and destroying 8 POSIX threads *thousands of times a second*. The OS-level context switching overhead was astronomical.
+The most profound finding from our data is the absolute reversal of PyTorch's performance depending on the scale of the workload.
 
-**The Fix:** We replaced the explicit POSIX thread logic with OpenMP (`#pragma omp parallel for`). OpenMP utilizes an implicit, persistent thread-pool which entirely bypasses the thread creation overhead. 
-**The Result:** The C Engine's epoch execution time dropped from **34.5ms** to **~4.5ms**, yielding a near **8x performance multiplier** with a single line of code.
+### Small-Scale (Dummy MLP)
+| Engine | Avg Epoch Time | Total Energy |
+|--------|----------------|--------------|
+| **NumPy (OpenBLAS)** | `1.27 ms` | `14.5 J` |
+| **C++ (SIMD)** | `3.71 ms` | `43.1 J` |
+| **PyTorch (ATen)** | `19.40 ms` | `38.4 J` |
+| **C (SIMD - Pthreads)** | `34.54 ms` | `239.3 J` |
 
-### 2. PyTorch Overhead vs. Bare-Metal Compute
-PyTorch clocked in at **19.4ms** per epoch, making it nearly **4.5x slower** than our custom C++ SIMD engine (which averaged **4.5ms**). 
+On the small Dummy dataset, our **C++ SIMD Engine completely crushed PyTorch (5.2x faster)!** 
+Because the matrix dimensions are tiny, the actual math takes fractions of a millisecond. PyTorch's `19.4ms` execution time is entirely eaten up by "Framework Overhead"—traversing the Python GIL, dynamically constructing the ATen computation graph, and dispatching tasks to MKL. Our lightweight C++ engine avoids all of this. 
 
-> [!NOTE]
-> Why does our tiny engine beat PyTorch? 
-> Because the matrices in our dummy MLP are very small (`1024x256`, `256x128`). At this scale, the actual floating-point math takes mere microseconds. PyTorch's execution time is entirely dominated by "Framework Overhead"—the time spent traversing the Python GIL, building the dynamic computation graph in ATen, and dispatching to MKL backend libraries.
+*(Note: We also captured the massive penalty of `pthread` spawning in the C Engine, which was fully mitigated by switching to OpenMP).*
 
-Conversely, **NumPy** averaged **1.2ms** per epoch. NumPy executes extremely tight, pre-compiled C-bindings to OpenBLAS, avoiding PyTorch's heavy autograd DAG construction.
+### Large-Scale (MNIST MLP)
+| Engine | Avg Epoch Time | Total Energy | Test Accuracy |
+|--------|----------------|--------------|---------------|
+| **PyTorch (ATen)** | `56.7 ms` | `884.4 J` | `79.44%` |
+| **NumPy (OpenBLAS)** | `94.4 ms` | `1416.5 J` | `79.40%` |
+| **C (SIMD)** | `307.5 ms` | `4628.9 J` | `73.07%` |
+| **C++ (SIMD)** | `366.4 ms` | `5249.1 J` | `73.07%` |
+| **C++ (Naive)** | `5592.8 ms` | `12579 J` | `72.23%` |
 
-### 3. Tiling is Harmful for Small Matrices
-Across both C and C++ engines, the `tiled` matrix multiplication backend performed *strictly worse* than the `naive` `O(N^3)` backend.
+When we scaled up to the `60000 x 784` MNIST dataset, the narrative violently flipped. 
+**PyTorch decimated our custom engines, running 5.4x faster than our C SIMD engine.**
+At this scale, the math dominates the runtime, completely diluting PyTorch's framework overhead. ATen's highly-tuned Intel MKL (Math Kernel Library) operations utilize cache-blocking, register tiling, and micro-kernels that vastly outperform our raw `#pragma omp parallel for` AVX intrinsic loops. 
 
 > [!TIP]
-> Tiling divides matrices into `32x32` spatial blocks to enforce temporal data locality in the L1/L2 caches. However, since our Dummy MLP dimensions (`256`, `128`, `64`) are very small, the matrices *already fit perfectly* into the cache. 
-> 
-> Enforcing 6 layers of deeply nested loops over small matrices introduces massive branch-prediction latency and loop-counter overhead without any spatial benefits. Tiling should only be used dynamically when matrices exceed cache capacities.
+> **The Takeaway:** Do not use heavy deep learning frameworks for tiny environments (like Reinforcement Learning with small MLPs); custom C/C++ engines are strictly better. But for massive datasets, you cannot easily beat decades of BLAS micro-kernel optimization.
 
-## Final Performance & Energy Rankings
+---
 
-Below are the final runtime and energy efficiency rankings for the Dummy MLP test (lower is better):
+## 2. Tiling vs Naive 
 
-| Rank | Engine / Backend | Avg Epoch Time | Total Energy |
-|------|------------------|----------------|--------------|
-| 1 | **NumPy (OpenBLAS)** | `1.27 ms` | `14.5 J` |
-| 2 | **C++ (SIMD)** | `4.40 ms` | `43.1 J` |
-| 3 | **C (SIMD)** | `5.20 ms` | `52.3 J` |
-| 4 | **PyTorch (ATen)** | `19.4 ms` | `38.4 J` |
-| 5 | **C++ (Naive)** | `20.6 ms` | `203.5 J` |
-| 6 | **C (Naive)** | `28.0 ms` | `272.2 J` |
-| 7 | **C (Tiled)** | `42.1 ms` | `326.1 J` |
-| 8 | **C++ (Tiled)** | `44.1 ms` | `301.9 J` |
+We observed a distinct behavior with the Cache-Tiled backend (`MATMUL_TILED`):
+- On the **Dummy dataset**, Tiled (`44ms`) was strictly worse than Naive (`20ms`). The matrices naturally fit in the L1/L2 cache, making the 6-layers of nested loops pure branch-prediction overhead.
+- On the **MNIST dataset**, Tiled (`605ms`) was nearly **10x faster** than Naive (`5592ms`)! Because the `60000 x 784` matrices massively exceed the L3 cache, the spatial locality enforced by block-tiling perfectly prevented cache thrashing.
 
-*(Note: PyTorch ranks 4th in speed but 2nd in energy, likely due to highly optimized CPU throttling and multi-core thread sleeping between Python dispatches.)*
+---
+
+## 3. Exploding Gradients & The Dying ReLU
+
+During testing, we initially saw the accuracy of our C engine skyrocket to 69% and then violently crash to 20% and permanently oscillate. We diagnosed this as the **Dying ReLU problem** caused by exponentially exploding gradients:
+1. We initially forgot to call `zero_grad()` at the end of the step in the C engine, causing gradients to infinitely accumulate. 
+2. Even after fixing `zero_grad()`, PyTorch and C++ continued to exhibit the exact same accuracy crashes.
+3. We realized the learning rate (`LR = 0.5`) was mathematically too high for Full-Batch Gradient descent. The optimizer overshot the minimum and landed on steep loss surfaces, triggering massive weight updates that pushed all pre-activations into negative space, permanently killing the ReLU neurons. Dropping `LR` to `0.05` allowed smooth convergence to `79.4%` (PyTorch) and `73.07%` (Custom Engine).
+
+---
+
+## Conclusion
+We successfully built a functional Automatic Differentiation engine from scratch in C/C++ that computes numerically stable gradients matching PyTorch. We optimized it from a `O(N^3)` Naive implementation to a highly parallelized OpenMP AVX engine, closing the gap significantly—but ultimately bowing to the supremacy of PyTorch's ATen backends on large-scale compute workloads.

@@ -39,8 +39,9 @@ def main():
     HIDDEN1 = 64
     HIDDEN2 = 32
     OUTPUT_DIM = 10
-    EPOCHS = 5
-    LR = 0.5
+    EPOCHS = 10
+    BATCH_SIZE = 128
+    LR = 0.01
 
     print("Training MNIST 3-Layer MLP on Numpy Engine...")
 
@@ -55,49 +56,58 @@ def main():
     total_time = 0.0
     start_energy = get_rapl_energy_joules()
 
+    NUM_BATCHES = TRAIN_SIZE // BATCH_SIZE
+
     for epoch in range(EPOCHS):
-        start_time = time.time()
+        epoch_time = 0.0
+        total_loss = 0.0
 
-        # Forward Pass
-        h1 = np.matmul(X_train, W1)
-        a1 = np.maximum(0, h1)
-        h2 = np.matmul(a1, W2)
-        a2 = np.maximum(0, h2)
-        logits = np.matmul(a2, W3)
+        for b in range(NUM_BATCHES):
+            start_idx = b * BATCH_SIZE
+            end_idx = start_idx + BATCH_SIZE
+            X_batch = X_train[start_idx:end_idx]
+            Y_batch = Y_train[start_idx:end_idx]
 
-        # Softmax + Cross Entropy
-        # Shift logits for numerical stability
-        shifted_logits = logits - np.max(logits, axis=1, keepdims=True)
-        exp_logits = np.exp(shifted_logits)
-        probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
-        
-        # Loss
-        loss = -np.mean(np.sum(Y_train * np.log(probs + 1e-8), axis=1))
+            start_time = time.time()
 
-        # Backward Pass
-        # dL/dLogits = (probs - Y_train) / BATCH_SIZE
-        grad_logits = (probs - Y_train) / TRAIN_SIZE
-        
-        grad_W3 = np.matmul(a2.T, grad_logits)
-        grad_a2 = np.matmul(grad_logits, W3.T)
-        
-        grad_h2 = grad_a2 * (h2 > 0).astype(np.float32)
-        grad_W2 = np.matmul(a1.T, grad_h2)
-        grad_a1 = np.matmul(grad_h2, W2.T)
-        
-        grad_h1 = grad_a1 * (h1 > 0).astype(np.float32)
-        grad_W1 = np.matmul(X_train.T, grad_h1)
+            # Forward Pass
+            h1 = np.matmul(X_batch, W1)
+            a1 = np.maximum(0, h1)
+            h2 = np.matmul(a1, W2)
+            a2 = np.maximum(0, h2)
+            logits = np.matmul(a2, W3)
 
-        # Optimizer step
-        W1 -= LR * grad_W1
-        W2 -= LR * grad_W2
-        W3 -= LR * grad_W3
+            # Softmax + Cross Entropy
+            shifted_logits = logits - np.max(logits, axis=1, keepdims=True)
+            exp_logits = np.exp(shifted_logits)
+            probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+            
+            # Loss
+            loss = -np.mean(np.sum(Y_batch * np.log(probs + 1e-8), axis=1))
 
-        epoch_time = time.time() - start_time
+            # Backward Pass
+            grad_logits = (probs - Y_batch) / BATCH_SIZE
+            
+            grad_W3 = np.matmul(a2.T, grad_logits)
+            grad_a2 = np.matmul(grad_logits, W3.T)
+            
+            grad_h2 = grad_a2 * (h2 > 0).astype(np.float32)
+            grad_W2 = np.matmul(a1.T, grad_h2)
+            grad_a1 = np.matmul(grad_h2, W2.T)
+            
+            grad_h1 = grad_a1 * (h1 > 0).astype(np.float32)
+            grad_W1 = np.matmul(X_batch.T, grad_h1)
+
+            # Optimizer step
+            W1 -= LR * grad_W1
+            W2 -= LR * grad_W2
+            W3 -= LR * grad_W3
+
+            epoch_time += time.time() - start_time
+            total_loss += loss
+
+        print(f"Epoch {epoch} | Avg Loss: {total_loss / NUM_BATCHES:.6f} | Compute Time: {epoch_time:.6f}s")
         total_time += epoch_time
-
-        train_acc = compute_accuracy(probs, Y_train)
-        print(f"Epoch {epoch} | Loss: {loss:.6f} | Train Acc: {train_acc * 100:.2f}% | Time: {epoch_time:.6f}s")
 
     # Test Evaluation
     h1_test = np.matmul(X_test, W1)

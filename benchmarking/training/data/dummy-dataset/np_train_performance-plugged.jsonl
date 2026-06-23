@@ -1,0 +1,1 @@
+{"task": "dummy_mlp", "engine": "numpy", "backend": "openblas", "total_time": 0.12752056121826172, "avg_epoch_time": 0.0012752056121826173, "energy_joules": 14.552270000014687}

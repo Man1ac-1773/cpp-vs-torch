@@ -1,0 +1,3 @@
+{"task": "dummy_mlp", "engine": "C++", "backend": "naive", "total_time": 2.06141, "avg_epoch_time": 0.0206141, "energy_joules": 203.521}
+{"task": "dummy_mlp", "engine": "C++", "backend": "tiled", "total_time": 4.4176, "avg_epoch_time": 0.044176, "energy_joules": 301.948}
+{"task": "dummy_mlp", "engine": "C++", "backend": "simd", "total_time": 0.371689, "avg_epoch_time": 0.00371689, "energy_joules": 43.1065}

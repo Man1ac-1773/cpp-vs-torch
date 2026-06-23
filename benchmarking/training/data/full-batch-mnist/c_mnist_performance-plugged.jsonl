@@ -1,0 +1,3 @@
+{"task": "mnist_mlp", "engine": "C", "backend": "naive", "total_time": 1425.38, "avg_epoch_time": 5.70153, "energy_joules": 12823, "test_acc": 0.7223}
+{"task": "mnist_mlp", "engine": "C", "backend": "tiled", "total_time": 182.055, "avg_epoch_time": 0.728221, "energy_joules": 10934.7, "test_acc": 0.7859}
+{"task": "mnist_mlp", "engine": "C", "backend": "simd", "total_time": 76.8902, "avg_epoch_time": 0.307561, "energy_joules": 4628.99, "test_acc": 0.7307}

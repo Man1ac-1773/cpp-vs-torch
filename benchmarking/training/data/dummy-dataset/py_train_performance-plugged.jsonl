@@ -1,0 +1,1 @@
+{"task": "dummy_mlp", "engine": "pytorch", "backend": "aten", "total_time": 1.940523624420166, "avg_epoch_time": 0.01940523624420166, "energy_joules": 38.43312899998273}
