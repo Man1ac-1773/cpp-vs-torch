@@ -87,4 +87,11 @@ static inline void sgd_step(SGD* opt) {
     }
 }
 
+static inline void sgd_zero_grad(SGD* opt) {
+    for (int p = 0; p < opt->num_params; p++) {
+        Tensor* param = opt->params[p];
+        memset(param->grad, 0, param->shape[0] * param->shape[1] * sizeof(float));
+    }
+}
+
 #endif

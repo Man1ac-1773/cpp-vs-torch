@@ -76,6 +76,12 @@ public:
             }
         }
     }
+
+    void zero_grad() {
+        for (auto p : params) {
+            std::fill(p->node->grad.begin(), p->node->grad.end(), 0.0f);
+        }
+    }
 };
 
 #endif

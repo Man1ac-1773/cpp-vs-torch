@@ -20,6 +20,8 @@ I documented the entire process. If you want to see exactly how you strip away a
 - **[02. Cache Misses & Tiling](reports/02_cache_misses_and_tiling.md)**: Hooking into the Linux `perf_event_open` syscall to prove that simply reading memory in the wrong order caused 1 billion cache misses, and how matrix tiling fixed it.
 - **[03. OS Jitter & Allocators](reports/03_os_jitter_and_allocators.md)**: Bypassing the compiler with AVX SIMD intrinsics, and using `getrusage()` to expose the hidden cost of high-level abstractions like `std::vector` compared to a raw C bump allocator.
 - **[04. Beating PyTorch](reports/04_beating_pytorch.md)**: Unlocking hardware threading via pthreads and OpenMP. Witnessing dynamic work-stealing finally push execution time down to 0.20s and secure the win.
+- **[05. End-to-End ML Training](reports/05_end_to_end_ml_training.md)**: Proving that our optimized C engine can train a Multi-Layer Perceptron up to 2x faster than PyTorch's ATen backend by utilizing an $O(1)$ Arena memory checkpoint to eliminate page faults.
+- **[06. Diagnosing Erratic Execution Times](reports/06_diagnosing_erratic_times.md)**: An analysis into why single-threaded CPU intensive workloads experience massive time jumps due to OS Thread Migration (E-Cores), Thermal Throttling, and Subnormal Floating Point microcode traps.
 
 ### Project structure
 - `/macrograd/`: The C engine source code
