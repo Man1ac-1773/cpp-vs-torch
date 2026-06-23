@@ -7,8 +7,8 @@ Can a solo dev build a matrix multiplication engine in raw C/C++ that beats PyTo
 Spoiler alert: I actually pulled it off lmao.
 
 This repository contains two backend engines built entirely from the ground up:
-- `macrograd`: A pure C backend utilizing a custom Bump Arena Allocator.
-- `minigrad`: A C++ backend relying on `std::vector` and RAII principles.
+- `macrograd`: A pure C backend utilizing a custom Bump Arena Allocator. [Credits](https://github.com/Celibistrial/macrograd)
+- `minigrad`: A C++ backend relying on `std::vector` and RAII principles. 
 
 I benchmarked both engines against PyTorch and NumPy across varying matrix sizes (N=10 to N=2000), stacking optimizations one by one. The performance journey was insane, dropping execution time from an abysmal 17 seconds down to just 0.20 seconds, officially dethroning PyTorch.
 
