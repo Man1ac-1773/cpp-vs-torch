@@ -36,4 +36,4 @@ The C++ engine, however, triggers the `std::vector` destructor when the matrix g
 
 ### Scripts and Raw Data
 
-The raw execution times for the SIMD anomaly were generated via `../benchmarking/benchmark.cpp` and stored in the `cpp-data` and `c-data` folders. The memory jitter (page fault) benchmarks were executed via ad-hoc scripts utilizing the Linux `<sys/resource.h>` library to track `RUSAGE_SELF` minor page faults.
+The raw execution times for the SIMD anomaly were generated via `../benchmarking/matmul/cpp_matmul_single.cpp` and `c_matmul_single.cpp`. The memory jitter (page fault) benchmarks were executed via `../benchmarking/pagefaults/cpp_pagefaults.cpp` and `c_pagefaults.cpp`, utilizing the Linux `<sys/resource.h>` library to track `RUSAGE_SELF` minor page faults.

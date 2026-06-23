@@ -32,7 +32,7 @@ My C engine, stripped of all runtime overhead and armed with raw AVX SIMD and $O
 
 ---
 ### Scripts & Raw Data
-- **C Engine Script**: [`benchmarking/train_bench_c.cpp`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/train_bench_c.cpp)
-- **C++ Engine Script**: [`benchmarking/train_bench_cpp.cpp`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/train_bench_cpp.cpp)
-- **PyTorch Script**: [`benchmarking/train_bench.py`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/train_bench.py)
-- **Raw Data Log**: [`cpp-data/train_results.jsonl`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/cpp-data/train_results.jsonl)
+- **C Engine Script**: [`benchmarking/training/c_train.cpp`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/training/c_train.cpp)
+- **C++ Engine Script**: [`benchmarking/training/cpp_train.cpp`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/training/cpp_train.cpp)
+- **PyTorch Script**: [`benchmarking/training/py_train.py`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/training/py_train.py)
+- **Raw Data Log**: [`benchmarking/training/data/`](file:///home/mayookh/Dev/cpptorch-vs-torch/cpp-vs-torch/benchmarking/training/data/)

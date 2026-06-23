@@ -36,4 +36,4 @@ OpenMP, however, uses dynamic work-stealing beneath the hood. As cores finish th
 
 ### Scripts and Raw Data
 
-The multithreaded benchmarks were run using `../benchmarking/benchmark_mt_c.cpp`, `../benchmarking/benchmark_mt_cpp.cpp`, and `../benchmarking/benchmark_mt.py`. The full performance curves from N=10 to N=2000 are recorded in the respective `mt_benchmark_results.jsonl` files located inside the `c-data`, `cpp-data`, and `py-data` directories.
+The multithreaded benchmarks were run using `../benchmarking/matmul/c_matmul_multi.cpp`, `../benchmarking/matmul/cpp_matmul_multi.cpp`, and `../benchmarking/matmul/py_matmul_multi.py`. The full performance curves from N=10 to N=2000 are recorded in the `../benchmarking/matmul/data/` directory.

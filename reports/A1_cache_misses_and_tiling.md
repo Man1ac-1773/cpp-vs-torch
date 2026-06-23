@@ -29,4 +29,4 @@ It is actually crazy how much performance you lose just by reading memory in the
 
 ### Scripts and Raw Data
 
-The PMU profiling logic for this experiment is isolated in `../benchmarking/cache_bench.cpp`, which interfaces directly with the Linux syscalls via `../benchmarking/perf_profiler.h`.
+The PMU profiling logic for this experiment is isolated in `../benchmarking/cache/cpp_cache.cpp` and `c_cache.cpp`, which interfaces directly with the Linux syscalls via `../benchmarking/common/perf_profiler.h`.

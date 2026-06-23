@@ -29,4 +29,4 @@ To fix this 17-second disaster, I needed to step in and restructure the memory a
 
 ### Scripts and Raw Data
 
-The benchmarking logic for this phase can be found in `../benchmarking/benchmark.cpp` and `../benchmarking/benchmark.py`. The raw sweeping data used to generate these insights is logged in `../benchmarking/c-data/`, `../benchmarking/cpp-data/`, and `../benchmarking/py-data/`.
+The benchmarking logic for this phase can be found in `../benchmarking/matmul/c_matmul_single.cpp`, `../benchmarking/matmul/cpp_matmul_single.cpp`, and `../benchmarking/matmul/py_matmul_single.py`. The raw sweeping data used to generate these insights is logged in the `../benchmarking/matmul/data/` directory.
