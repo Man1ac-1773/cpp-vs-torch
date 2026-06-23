@@ -10,7 +10,7 @@ enum MatmulBackend {
     MATMUL_SIMD
 };
 
-extern MatmulBackend g_matmul_backend; // Defined in main program
+static MatmulBackend g_matmul_backend = MATMUL_SIMD;
 
 class Linear {
 public:
