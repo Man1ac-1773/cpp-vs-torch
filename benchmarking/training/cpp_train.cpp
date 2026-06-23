@@ -9,7 +9,7 @@
 using namespace std;
 
 // Define the global matmul backend for minigrad
-MatmulBackend g_matmul_backend = MATMUL_SIMD;
+
 
 int main(int argc, char* argv[]) {
     string mode = "performance-plugged";

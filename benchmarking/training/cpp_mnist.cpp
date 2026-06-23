@@ -9,7 +9,7 @@
 
 using namespace std;
 
-MatmulBackend g_matmul_backend = MATMUL_SIMD;
+
 
 static inline void load_mnist(const char* image_path, const char* label_path, Tensor& X, Tensor& Y) {
     FILE* f_img = fopen(image_path, "rb");
