@@ -46,8 +46,8 @@ def run_mnist_power_bench(f):
     OUTPUT_DIM = 10
     BATCH_SIZE = 60000
     
-    X_np = np.fromfile("../resources/data/train_images.bin", dtype=np.float32).reshape(BATCH_SIZE, INPUT_DIM)
-    Y_np = np.fromfile("../resources/data/train_labels.bin", dtype=np.float32).reshape(BATCH_SIZE, OUTPUT_DIM)
+    X_np = np.fromfile("../../resources/data/train_images.bin", dtype=np.float32).reshape(BATCH_SIZE, INPUT_DIM)
+    Y_np = np.fromfile("../../resources/data/train_labels.bin", dtype=np.float32).reshape(BATCH_SIZE, OUTPUT_DIM)
     
     X = torch.tensor(X_np, dtype=torch.float32)
     Y = torch.tensor(Y_np, dtype=torch.float32)
@@ -74,7 +74,7 @@ def run_mnist_power_bench(f):
     f.write(json.dumps({"task": "mnist_epoch", "engine": "pytorch", "energy_joules": joules}) + "\n")
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "performance_plugged"
-filepath = f"./data/power/py_{mode}.jsonl"
+filepath = f"./data/py_{mode}.jsonl"
 
 print(f"Sweeping Power metrics for PyTorch and Numpy ({mode}) (N=10 to N=1000)...")
 with open(filepath, "a") as f:
