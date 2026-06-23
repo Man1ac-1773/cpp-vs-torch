@@ -4,11 +4,21 @@
 #include "tensor.h"
 #include <vector>
 
+enum MatmulBackend {
+    MATMUL_NAIVE,
+    MATMUL_TILED,
+    MATMUL_SIMD
+};
+
+extern MatmulBackend g_matmul_backend; // Defined in main program
+
 class Linear {
 public:
     Tensor weight;
     Linear(int in_features, int out_features) : weight(in_features, out_features) {}
     Tensor operator()(const Tensor& x) {
+        if (g_matmul_backend == MATMUL_NAIVE) return x * weight;
+        if (g_matmul_backend == MATMUL_TILED) return matmul_tiled(x, weight);
         return matmul_simd_mt(x, weight);
     }
 };
@@ -28,6 +38,27 @@ public:
     
     std::vector<Tensor*> parameters() {
         return {&fc1.weight, &fc2.weight};
+    }
+};
+
+class MLP3 {
+public:
+    Linear fc1;
+    Linear fc2;
+    Linear fc3;
+    MLP3(int input_dim, int hidden1_dim, int hidden2_dim, int output_dim) 
+        : fc1(input_dim, hidden1_dim), fc2(hidden1_dim, hidden2_dim), fc3(hidden2_dim, output_dim) {}
+    
+    Tensor forward(const Tensor& x) {
+        Tensor h1 = fc1(x);
+        Tensor a1 = relu(h1);
+        Tensor h2 = fc2(a1);
+        Tensor a2 = relu(h2);
+        return fc3(a2);
+    }
+    
+    std::vector<Tensor*> parameters() {
+        return {&fc1.weight, &fc2.weight, &fc3.weight};
     }
 };
 

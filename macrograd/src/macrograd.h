@@ -2,6 +2,7 @@
 #define macrograd_h
 #include <cstdio>
 #include <cstring>     // for memset
+#include <math.h>      // for expf, logf
 #include <immintrin.h> // raw cpu instructions for SIMD
 
 #include "../../benchmarking/common/chrome_profiler.h"
@@ -167,6 +168,7 @@ static void _matmul_backward(Tensor* self)
     // simulates matrix transpose via index manipulation. avoids physical memory reallocation.
 
     // grad_A += upstream_grad @ B^T
+#pragma omp parallel for
     for (uint i = 0; i < A->shape[0]; i++)
     {
         for (uint j = 0; j < B->shape[1]; j++)
@@ -179,6 +181,7 @@ static void _matmul_backward(Tensor* self)
         }
     }
     // grad_B += A^T @ upstream_grad
+#pragma omp parallel for
     for (uint k = 0; k < A->shape[1]; k++)
     {
         for (uint j = 0; j < B->shape[1]; j++)
@@ -187,6 +190,58 @@ static void _matmul_backward(Tensor* self)
             {
                 //  A is accessed as [i, k] instead of [k, i]
                 B->grad[k * B->shape[1] + j] += A->data[i * A->shape[1] + k] * self->grad[i * self->shape[1] + j];
+            }
+        }
+    }
+}
+
+#define TILE_SIZE 32 // sizes tile to perfectly occupy l1 data cache.
+
+static void _matmul_backward_tiled(Tensor* self)
+{
+    Tensor* A = self->parent[0];
+    Tensor* B = self->parent[1];
+
+    // grad_A += upstream_grad @ B^T
+#pragma omp parallel for
+    for (uint i = 0; i < A->shape[0]; i += TILE_SIZE)
+    {
+        for (uint j = 0; j < B->shape[1]; j += TILE_SIZE)
+        {
+            for (uint k = 0; k < A->shape[1]; k += TILE_SIZE)
+            {
+                for (uint ii = i; ii < i + TILE_SIZE && ii < A->shape[0]; ii++)
+                {
+                    for (uint jj = j; jj < j + TILE_SIZE && jj < B->shape[1]; jj++)
+                    {
+                        for (uint kk = k; kk < k + TILE_SIZE && kk < A->shape[1]; kk++)
+                        {
+                            A->grad[ii * A->shape[1] + kk] += self->grad[ii * self->shape[1] + jj] * B->data[kk * B->shape[1] + jj];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // grad_B += A^T @ upstream_grad
+#pragma omp parallel for
+    for (uint k = 0; k < A->shape[1]; k += TILE_SIZE)
+    {
+        for (uint j = 0; j < B->shape[1]; j += TILE_SIZE)
+        {
+            for (uint i = 0; i < A->shape[0]; i += TILE_SIZE)
+            {
+                for (uint kk = k; kk < k + TILE_SIZE && kk < A->shape[1]; kk++)
+                {
+                    for (uint jj = j; jj < j + TILE_SIZE && jj < B->shape[1]; jj++)
+                    {
+                        for (uint ii = i; ii < i + TILE_SIZE && ii < A->shape[0]; ii++)
+                        {
+                            B->grad[kk * B->shape[1] + jj] += A->data[ii * A->shape[1] + kk] * self->grad[ii * self->shape[1] + jj];
+                        }
+                    }
+                }
             }
         }
     }
@@ -257,6 +312,70 @@ static void _matmul_backward_simd(Tensor* self)
     }
 }
 
+static void _matmul_backward_simd_mt(Tensor* self)
+{
+    Tensor* A = self->parent[0];
+    Tensor* B = self->parent[1];
+
+    uint M = A->shape[0];
+    uint K = A->shape[1];
+    uint N = B->shape[1];
+
+#pragma omp parallel for
+    for (uint k = 0; k < K; k++)
+    {
+        for (uint i = 0; i < M; i++)
+        {
+            __m256 a_val = _mm256_set1_ps(A->data[i * K + k]);
+            uint j = 0;
+            for (; j + 8 <= N; j += 8)
+            {
+                __m256 grad_out_vals = _mm256_loadu_ps(&self->grad[i * N + j]);
+                __m256 grad_b_vals = _mm256_loadu_ps(&B->grad[k * N + j]);
+
+                grad_b_vals = _mm256_fmadd_ps(a_val, grad_out_vals, grad_b_vals);
+                _mm256_storeu_ps(&B->grad[k * N + j], grad_b_vals);
+            }
+            for (; j < N; j++)
+            {
+                B->grad[k * N + j] += A->data[i * K + k] * self->grad[i * N + j];
+            }
+        }
+    }
+
+    f32* B_T = (f32*) arena_alloc(&g_arena, K * N * sizeof(f32));
+#pragma omp parallel for
+    for (uint k = 0; k < K; k++)
+    {
+        for (uint j = 0; j < N; j++)
+        {
+            B_T[j * K + k] = B->data[k * N + j];
+        }
+    }
+
+#pragma omp parallel for
+    for (uint i = 0; i < M; i++)
+    {
+        for (uint j = 0; j < N; j++)
+        {
+            __m256 grad_out_val = _mm256_set1_ps(self->grad[i * N + j]);
+            uint k = 0;
+            for (; k + 8 <= K; k += 8)
+            {
+                __m256 bt_vals = _mm256_loadu_ps(&B_T[j * K + k]);
+                __m256 grad_a_vals = _mm256_loadu_ps(&A->grad[i * K + k]);
+
+                grad_a_vals = _mm256_fmadd_ps(grad_out_val, bt_vals, grad_a_vals);
+                _mm256_storeu_ps(&A->grad[i * K + k], grad_a_vals);
+            }
+            for (; k < K; k++)
+            {
+                A->grad[i * K + k] += self->grad[i * N + j] * B_T[j * K + k];
+            }
+        }
+    }
+}
+
 // naive matrix multiplication operator. utilizes standard o(n^3) nested loops.
 static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
 {
@@ -269,6 +388,7 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
     }
     Tensor* out = new_tensor(a->shape[0], b->shape[1]);
 
+#pragma omp parallel for
     for (uint i = 0; i < a->shape[0]; i++)
     {
         for (uint j = 0; j < b->shape[1]; j++)
@@ -290,7 +410,7 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
     return out;
 }
 
-#define TILE_SIZE 32 // sizes tile to perfectly occupy l1 data cache.
+
 
 // executes tiled matrix multiplication. forces temporal data locality within l1 cache. minimizes ram fetches.
 static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
@@ -306,6 +426,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
     Tensor* out = new_tensor(a->shape[0], b->shape[1]);
 
     // iterates across macro tiles.
+#pragma omp parallel for
     for (uint i = 0; i < a->shape[0]; i += TILE_SIZE)
     {
         for (uint j = 0; j < b->shape[1]; j += TILE_SIZE)
@@ -336,7 +457,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
     out->n_parent = 2;
     out->visited = 0;
 
-    out->backward = _matmul_backward;
+    out->backward = _matmul_backward_tiled;
 
     PROFILE_END(matmul_tiled);
     return out;
@@ -521,7 +642,7 @@ static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
     out->parent[1] = b;
     out->n_parent = 2;
     out->visited = 0;
-    out->backward = _matmul_backward_simd;
+    out->backward = _matmul_backward_simd_mt;
     PROFILE_END(matmul_simd_mt);
     return out;
 }
@@ -586,6 +707,74 @@ static inline Tensor* tensor_mse_loss(Tensor* pred, Tensor* target)
     out->parent[1] = target;
     out->n_parent = 2;
     out->backward = _mse_backward;
+    return out;
+}
+
+// executes backward pass for softmax cross entropy loss.
+static void _cross_entropy_backward(Tensor* self)
+{
+    Tensor* pred = self->parent[0];
+    Tensor* target = self->parent[1];
+    uint batch_size = pred->shape[0];
+    uint num_classes = pred->shape[1];
+    f32 grad_out = self->grad[0];
+
+    for (uint i = 0; i < batch_size; i++)
+    {
+        f32 max_val = pred->data[i * num_classes];
+        for (uint j = 1; j < num_classes; j++) {
+            if (pred->data[i * num_classes + j] > max_val) max_val = pred->data[i * num_classes + j];
+        }
+        f32 sum_exp = 0.0f;
+        for (uint j = 0; j < num_classes; j++) {
+            sum_exp += expf(pred->data[i * num_classes + j] - max_val);
+        }
+        
+        for (uint j = 0; j < num_classes; j++) {
+            f32 prob = expf(pred->data[i * num_classes + j] - max_val) / sum_exp;
+            pred->grad[i * num_classes + j] += grad_out * (prob - target->data[i * num_classes + j]) / batch_size;
+        }
+    }
+}
+
+// computes softmax cross entropy loss. reduces to 1x1 scalar tensor.
+static inline Tensor* tensor_cross_entropy_loss(Tensor* pred, Tensor* target)
+{
+    if (!_compare_shape(pred, target))
+    {
+        fprintf(stderr, "Shape mismatch for Cross Entropy Loss\n");
+        return NULL;
+    }
+    Tensor* out = new_tensor(1, 1);
+    f32 sum_loss = 0.0f;
+    uint batch_size = pred->shape[0];
+    uint num_classes = pred->shape[1];
+
+    for (uint i = 0; i < batch_size; i++)
+    {
+        f32 max_val = pred->data[i * num_classes];
+        for (uint j = 1; j < num_classes; j++) {
+            if (pred->data[i * num_classes + j] > max_val) max_val = pred->data[i * num_classes + j];
+        }
+        f32 sum_exp = 0.0f;
+        for (uint j = 0; j < num_classes; j++) {
+            sum_exp += expf(pred->data[i * num_classes + j] - max_val);
+        }
+        
+        for (uint j = 0; j < num_classes; j++) {
+            if (target->data[i * num_classes + j] > 0.5f) { // it's 1-hot
+                f32 prob = expf(pred->data[i * num_classes + j] - max_val) / sum_exp;
+                sum_loss += -logf(prob + 1e-8f); // add epsilon for numerical stability
+            }
+        }
+    }
+    
+    out->data[0] = sum_loss / batch_size;
+    
+    out->parent[0] = pred;
+    out->parent[1] = target;
+    out->n_parent = 2;
+    out->backward = _cross_entropy_backward;
     return out;
 }
 

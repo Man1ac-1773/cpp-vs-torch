@@ -2,6 +2,7 @@
 #include <cassert>
 #include <functional>
 #include <immintrin.h>
+#include <cmath>
 #include <memory>
 #include <unordered_set>
 #include <vector>
@@ -120,6 +121,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
 
     Tensor out(a.node->rows, b.node->cols);
 
+#pragma omp parallel for
     for (size_t i = 0; i < a.node->rows; i++)
     {
         for (size_t j = 0; j < b.node->cols; j++)
@@ -136,6 +138,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
         // computes local gradient of a. grad_A += grad_out @ B^T.
+#pragma omp parallel for
         for (size_t i = 0; i < a_node->rows; i++)
         {
             for (size_t j = 0; j < b_node->cols; j++)
@@ -149,6 +152,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
         }
 
         // computes local gradient of b. grad_B += A^T @ grad_out.
+#pragma omp parallel for
         for (size_t k = 0; k < a_node->cols; k++)
         {
             for (size_t j = 0; j < b_node->cols; j++)
@@ -175,6 +179,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     Tensor out(a.node->rows, b.node->cols);
 
     const uint TILE_SIZE = 32;
+#pragma omp parallel for
     for (size_t i = 0; i < a.node->rows; i += TILE_SIZE)
     {
         for (size_t j = 0; j < b.node->cols; j += TILE_SIZE)
@@ -197,28 +202,48 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
 
     out.node->_prev = {a.node, b.node};
     // executes naive backward pass. omits tiling logic to minimize code complexity.
-    out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
+    out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), TILE_SIZE]()
     {
-        for (size_t i = 0; i < a_node->rows; i++)
+#pragma omp parallel for
+        for (size_t i = 0; i < a_node->rows; i += TILE_SIZE)
         {
-            for (size_t j = 0; j < b_node->cols; j++)
+            for (size_t j = 0; j < b_node->cols; j += TILE_SIZE)
             {
-                for (size_t k = 0; k < a_node->cols; k++)
+                for (size_t k = 0; k < a_node->cols; k += TILE_SIZE)
                 {
-                    a_node->grad[i * a_node->cols + k] +=
-                        out_node->grad[i * out_node->cols + j] * b_node->data[k * b_node->cols + j];
+                    for (size_t ii = i; ii < i + TILE_SIZE && ii < a_node->rows; ii++)
+                    {
+                        for (size_t jj = j; jj < j + TILE_SIZE && jj < b_node->cols; jj++)
+                        {
+                            for (size_t kk = k; kk < k + TILE_SIZE && kk < a_node->cols; kk++)
+                            {
+                                a_node->grad[ii * a_node->cols + kk] +=
+                                    out_node->grad[ii * out_node->cols + jj] * b_node->data[kk * b_node->cols + jj];
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        for (size_t k = 0; k < a_node->cols; k++)
+#pragma omp parallel for
+        for (size_t k = 0; k < a_node->cols; k += TILE_SIZE)
         {
-            for (size_t j = 0; j < b_node->cols; j++)
+            for (size_t j = 0; j < b_node->cols; j += TILE_SIZE)
             {
-                for (size_t i = 0; i < a_node->rows; i++)
+                for (size_t i = 0; i < a_node->rows; i += TILE_SIZE)
                 {
-                    b_node->grad[k * b_node->cols + j] +=
-                        a_node->data[i * a_node->cols + k] * out_node->grad[i * out_node->cols + j];
+                    for (size_t kk = k; kk < k + TILE_SIZE && kk < a_node->cols; kk++)
+                    {
+                        for (size_t jj = j; jj < j + TILE_SIZE && jj < b_node->cols; jj++)
+                        {
+                            for (size_t ii = i; ii < i + TILE_SIZE && ii < a_node->rows; ii++)
+                            {
+                                b_node->grad[kk * b_node->cols + jj] +=
+                                    a_node->data[ii * a_node->cols + kk] * out_node->grad[ii * out_node->cols + jj];
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -361,6 +386,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     // executes backward pass. inherits single-threaded simd logic to avoid write contention.
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), M, K, N]()
     {
+#pragma omp parallel for
         for (size_t k = 0; k < K; k++)
         {
             for (size_t i = 0; i < M; i++)
@@ -383,6 +409,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
         }
 
         std::vector<float> B_T(K * N);
+#pragma omp parallel for
         for (size_t k = 0; k < K; k++)
         {
             for (size_t j = 0; j < N; j++)
@@ -391,6 +418,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
             }
         }
 
+#pragma omp parallel for
         for (size_t i = 0; i < M; i++)
         {
             for (size_t j = 0; j < N; j++)
@@ -460,6 +488,60 @@ inline Tensor mse_loss(const Tensor& pred, const Tensor& target)
         {
             float diff = pred_node->data[i] - target_node->data[i];
             pred_node->grad[i] += grad_out * (2.0f * diff / n);
+        }
+    };
+    
+    return out;
+}
+
+// computes softmax cross entropy loss. reduces to 1x1 scalar tensor.
+inline Tensor cross_entropy_loss(const Tensor& pred, const Tensor& target)
+{
+    assert(pred.node->rows == target.node->rows && pred.node->cols == target.node->cols);
+    Tensor out(1, 1);
+    float sum_loss = 0.0f;
+    size_t batch_size = pred.node->rows;
+    size_t num_classes = pred.node->cols;
+    
+    for (size_t i = 0; i < batch_size; i++)
+    {
+        float max_val = pred.node->data[i * num_classes];
+        for (size_t j = 1; j < num_classes; j++) {
+            if (pred.node->data[i * num_classes + j] > max_val) max_val = pred.node->data[i * num_classes + j];
+        }
+        float sum_exp = 0.0f;
+        for (size_t j = 0; j < num_classes; j++) {
+            sum_exp += std::exp(pred.node->data[i * num_classes + j] - max_val);
+        }
+        
+        for (size_t j = 0; j < num_classes; j++) {
+            if (target.node->data[i * num_classes + j] > 0.5f) {
+                float prob = std::exp(pred.node->data[i * num_classes + j] - max_val) / sum_exp;
+                sum_loss += -std::log(prob + 1e-8f);
+            }
+        }
+    }
+    out.node->data[0] = sum_loss / batch_size;
+    
+    out.node->_prev = {pred.node, target.node};
+    out.node->_backward = [pred_node = pred.node, target_node = target.node, out_node = out.node.get(), batch_size, num_classes]()
+    {
+        float grad_out = out_node->grad[0];
+        for (size_t i = 0; i < batch_size; i++)
+        {
+            float max_val = pred_node->data[i * num_classes];
+            for (size_t j = 1; j < num_classes; j++) {
+                if (pred_node->data[i * num_classes + j] > max_val) max_val = pred_node->data[i * num_classes + j];
+            }
+            float sum_exp = 0.0f;
+            for (size_t j = 0; j < num_classes; j++) {
+                sum_exp += std::exp(pred_node->data[i * num_classes + j] - max_val);
+            }
+            
+            for (size_t j = 0; j < num_classes; j++) {
+                float prob = std::exp(pred_node->data[i * num_classes + j] - max_val) / sum_exp;
+                pred_node->grad[i * num_classes + j] += grad_out * (prob - target_node->data[i * num_classes + j]) / batch_size;
+            }
         }
     };
     
