@@ -76,5 +76,34 @@ static inline long long perf_read(PerfCounter* pc) {
     }
     return count;
 }
+// Initializes a counter to track Branch Instructions
+static inline void perf_init_branch_instructions(PerfCounter* pc) {
+    struct perf_event_attr pe;
+    memset(&pe, 0, sizeof(struct perf_event_attr));
+    pe.type = PERF_TYPE_HARDWARE;
+    pe.size = sizeof(struct perf_event_attr);
+    pe.config = PERF_COUNT_HW_BRANCH_INSTRUCTIONS;
+    
+    pe.disabled = 1;
+    pe.exclude_kernel = 1;
+    pe.exclude_hv = 1;
+
+    pc->fd = perf_event_open(&pe, 0, -1, -1, 0);
+}
+
+// Initializes a counter to track Branch Misses
+static inline void perf_init_branch_misses(PerfCounter* pc) {
+    struct perf_event_attr pe;
+    memset(&pe, 0, sizeof(struct perf_event_attr));
+    pe.type = PERF_TYPE_HARDWARE;
+    pe.size = sizeof(struct perf_event_attr);
+    pe.config = PERF_COUNT_HW_BRANCH_MISSES;
+    
+    pe.disabled = 1;
+    pe.exclude_kernel = 1;
+    pe.exclude_hv = 1;
+
+    pc->fd = perf_event_open(&pe, 0, -1, -1, 0);
+}
 
 #endif
