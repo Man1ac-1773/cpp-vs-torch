@@ -1,0 +1,6 @@
+{"flag": "-O0", "time": 1.97446, "speedup": 1.0}
+{"flag": "-O1", "time": 0.474299, "speedup": 4.1629}
+{"flag": "-O2", "time": 0.480103, "speedup": 4.1125}
+{"flag": "-O3", "time": 0.48039, "speedup": 4.1101}
+{"flag": "-Ofast", "time": 0.393613, "speedup": 5.0162}
+{"flag": "-O3 -march=native", "time": 0.822869, "speedup": 2.3994}
