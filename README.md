@@ -28,6 +28,7 @@ For those interested in the raw hardware metrics and OS-level interactions, I've
 - **[A1. Cache Misses & Tiling](reports/A1_cache_misses_and_tiling.md)**: Hooking into the Linux `perf_event_open` syscall to prove that simply reading memory in the wrong order caused 1 billion cache misses, and how matrix tiling fixed it.
 - **[A2. OS Jitter & Allocators](reports/A2_os_jitter_and_allocators.md)**: Bypassing the compiler with AVX SIMD intrinsics, and using `getrusage()` to expose the hidden cost of high-level abstractions like `std::vector` (thousands of minor page faults) compared to a raw C bump allocator (zero).
 - **[A3. Power Consumption Analysis](reports/A3_power_consumption_analysis.md)**: Utilizing the Linux RAPL interface to measure the exact microjoule energy cost of training. Proving the "Race to Sleep" concept and demonstrating why optimization is inherently green.
+- **[A4. The Branch Predictor & Loop Unrolling](reports/A4_branch_predictor_and_loop_unrolling.md)**: Dynamically hooking the PMU into Python via `ctypes` to prove that PyTorch's hand-tuned micro-kernels execute **8.5 Billion fewer branches** than standard C++ loops at scale.
 
 ### Project structure
 - `/macrograd/`: The C engine source code
