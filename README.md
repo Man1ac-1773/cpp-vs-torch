@@ -30,6 +30,8 @@ For those interested in the raw hardware metrics and OS-level interactions, I've
 - **[A3. Power Consumption Analysis](reports/A3_power_consumption_analysis.md)**: Utilizing the Linux RAPL interface to measure the exact microjoule energy cost of training. Proving the "Race to Sleep" concept and demonstrating why optimization is inherently green.
 - **[A4. The Branch Predictor & Loop Unrolling](reports/A4_branch_predictor_and_loop_unrolling.md)**: Dynamically hooking the PMU into Python via `ctypes` to prove that PyTorch's hand-tuned micro-kernels execute **8.5 Billion fewer branches** than standard C++ loops at scale.
 - **[A5. Compiler Optimization Flags](reports/A5_compiler_optimization_flags.md)**: An A/B test of GCC flags (`-O0` through `-Ofast`), proving how relaxing strict IEEE math compliance triggers auto-vectorization for a massive 5.0x speedup, and exposing the `-march=native` hardware trap.
+- **[A6. Amdahl's Law and Scaling](reports/A6_amdahls_law_and_scaling.md)**: A thread-scaling sweep from 1 to 20 cores, proving how asymmetric CPU architectures (P-cores vs E-cores) cause immediate performance drops, and why memory-bound code physically cannot scale across threads.
+- **[A7. The Roofline Model](reports/A7_memory_bandwidth_roofline.md)**: Calculating the physical GB/s and GFLOPS limits of the hardware during execution, proving the exact mathematical point where an algorithm transitions from being Memory-Bound to Compute-Bound.
 
 ### Project structure
 - `/macrograd/`: The C engine source code
