@@ -1,39 +1,47 @@
 # A2. OS Jitter and Allocators
 
-After tiling, I went full low-level and replaced the standard math operations with Advanced Vector Extensions (AVX) SIMD intrinsics. 
+### 1. The Hypothesis
+After optimizing the CPU cache via Tiling, I bypassed the compiler entirely and wrote custom AVX2 SIMD intrinsics. This dropped the execution time from seconds down to about 1.78s for an $N=2000$ matrix. However, an anomaly emerged: my C engine (`macrograd`) was consistently ~20% faster than my C++ engine (`minigrad`), despite both executing the exact same mathematical SIMD instructions. 
 
-By using the `_mm256_fmadd_ps` hardware instruction, I forced the CPU to execute 8 floating-point operations in a single clock cycle. This optimization dropped the execution time from seconds down to about 1.78s for an N=2000 matrix. 
+My hypothesis was that the standard C++ memory management paradigm—dynamically allocating matrices on the heap using `std::vector`—was introducing severe Operating System overhead compared to the C engine's custom Bump Arena Allocator.
 
-But as I was analyzing the sweep data, I noticed a very weird anomaly. 
+### 2. The Empirical Data
+To prove this, I hooked into the Linux `getrusage()` system call to track the number of Minor Page Faults triggered by both engines during a simulated machine learning training loop (repeated matrix allocations).
 
-### The SIMD Anomaly (N=2000)
+Here is the data for a single $N=2000$ matrix multiplication pass:
 
-| Engine | Memory Manager | SIMD Time | Relative Speed |
+| Engine | Memory Manager | SIMD Time | Minor Page Faults |
 |---|---|---|---|
-| **C (`macrograd`)** | Bump Arena Allocator | 1.78s | 1.0x |
-| **C++ (`minigrad`)** | `std::vector` (Heap) | 2.13s | 1.19x Slower |
+| **C (`macrograd`)** | Bump Allocator | `1.78s` | **0** |
+| **C++ (`minigrad`)** | `std::vector` | `2.13s` | **7,813** |
 
-My C engine was consistently nearly 20% faster than my C++ engine, even though both were running the exact same AVX instructions and mathematical loops. The only difference between the two engines was memory management. 
+### 3. The Hardware Mechanism: Demand Paging
+The common misconception is that the `std::vector` destructor or `malloc()` calls are intrinsically slow. While true, that is not what caused 7,813 page faults. The true culprit is **Demand Paging**.
 
-The C engine uses a custom Bump Arena Allocator, which pre-allocates a massive 1GB chunk of memory up front. The C++ engine relies on the standard library `std::vector` to dynamically allocate heap memory. 
+When the C++ engine calls `new` or `std::vector` to instantiate a matrix, the Linux kernel does not actually map physical RAM to the process. It merely reserves Virtual Address space. The physical RAM is mapped *lazily*. 
+When my matrix multiplication code attempts to write to the very first float of that newly allocated vector, the CPU throws a Minor Page Fault. The execution is instantly trapped, control is handed back to the Linux Kernel, the OS finds a physical page in RAM, maps it to the virtual address, and hands control back to my code. This trap-and-map cycle occurs thousands of times as the algorithm touches new pages of the matrix.
 
-To prove that C++ was suffering from OS-level jitter, I hooked into the Linux `getrusage()` system call to track Minor Page Faults during repeated matrix allocations (simulating a standard machine learning training loop).
+In contrast, my C engine uses a Bump Arena Allocator. It pre-allocates a massive 1GB chunk of memory up front and pre-faults it (by using `calloc` or `memset`). During the actual training loop, allocating a new matrix simply means moving a pointer forward. The memory has already been physically mapped to the CPU, resulting in absolutely zero kernel traps.
 
-### Minor Page Faults (Second Allocation Pass)
+### 4. The Code Proof
+Here is the catastrophic overhead of C++ RAII (Resource Acquisition Is Initialization) vs C Arena Allocation:
 
-| Engine | Memory Manager | Minor Page Faults |
-|---|---|---|
-| **C (`macrograd`)** | Bump Allocator | 0 |
-| **C++ (`minigrad`)** | `std::vector` | 7,813 |
+**The C++ Engine (OS Jitter):**
+```cpp
+// Inside the loop: allocates virtual memory. 
+// Faults occur upon writing. Destroys at scope exit.
+std::vector<float> output(N * N, 0.0f); 
+```
 
-### The Verdict
+**The C Engine (Zero Jitter):**
+```c
+// Pre-mapped memory. Allocation is just a pointer increment.
+float* output = (float*)g_arena.top;
+g_arena.top += (N * N * sizeof(float));
 
-The data perfectly explained the anomaly. Because the C engine uses a bump allocator, the memory remains physically mapped to the process even when it is "freed" (by simply resetting a pointer). The subsequent matrix allocations happen instantly. 
+// Freeing memory at the end of the pass is instant:
+g_arena.top = checkpoint;
+```
 
-The C++ engine, however, triggers the `std::vector` destructor when the matrix goes out of scope, returning the memory to the OS. On the very next iteration, the OS has to pause the CPU, trap the process, and remap the physical RAM pages, triggering thousands of page faults per matrix. 
-
-**Key Learning:** Over a 10-run sweep, the C++ engine suffered millions of microscopic OS context switches, adding a massive 0.35s overhead. High-level abstractions like `std::vector` are incredibly convenient, but they are absolutely not free lmao.
-
-### Scripts and Raw Data
-
-The raw execution times for the SIMD anomaly were generated via `../benchmarking/matmul/cpp_matmul_single.cpp` and `c_matmul_single.cpp`. The memory jitter (page fault) benchmarks were executed via `../benchmarking/pagefaults/cpp_pagefaults.cpp` and `c_pagefaults.cpp`, utilizing the Linux `<sys/resource.h>` library to track `RUSAGE_SELF` minor page faults.
+### 5. The Verdict
+Over a multi-epoch training run, the C++ engine suffered millions of microscopic OS context switches, adding massive overhead. High-level abstractions like `std::vector` are incredibly convenient, but putting dynamic heap allocations inside the inner loops of high-performance compute engines is fatal. By bypassing the kernel entirely with an Arena Allocator, I successfully squeezed an extra 19% of raw speed out of the exact same SIMD instructions.

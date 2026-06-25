@@ -1,36 +1,42 @@
 # A7. The Roofline Model: Memory vs Compute
 
-In hardware profiling, the "Roofline Model" is a visual framework used to determine if a specific workload is bottlenecked by the speed of the CPU's memory bus (Memory Bound) or the speed of the CPU's arithmetic registers (Compute Bound).
+### 1. The Hypothesis
+In hardware profiling, the "Roofline Model" is a framework used to determine if a workload is bottlenecked by the CPU's memory bus (Memory Bound) or the CPU's arithmetic registers (Compute Bound). 
 
-Matrix multiplication has an "Arithmetic Intensity" of roughly $N/6$ (FLOPs per byte transferred). This means at small matrix sizes ($N$), you perform very little math per byte of data loaded. As $N$ scales, the math required scales exponentially faster than the memory required. 
+Matrix multiplication has an "Arithmetic Intensity" of roughly $N/6$ (FLOPs per byte transferred). At small matrix sizes, you perform very little math per byte loaded. As $N$ scales, the arithmetic required scales exponentially faster than the memory required. My hypothesis was that I could map the transition point where PyTorch shifts from Memory Bound to Compute Bound, and prove mathematically why the Naive engine never gets there.
 
-To prove exactly when this transition occurs on our hardware, I ran a fully multithreaded matrix sweep and explicitly calculated the theoretical hardware limits being saturated.
+### 2. The Empirical Data
+I explicitly calculated the achieved memory throughput (Bytes Transferred / Execution Time) and achieved compute throughput (Floating Point Operations / Execution Time) for a multithreaded sweep. 
 
-### Achieved Memory Throughput vs Compute (PyTorch Intel MKL)
+**PyTorch (Intel MKL) Scaling:**
+| Matrix Size ($N$) | Achieved Memory Bandwidth | Achieved Compute |
+| :---: | :---: | :---: |
+| **512** | **5.66 GB/s** | `519 GFLOPS` |
+| **1024**| **3.14 GB/s** | `575 GFLOPS` |
+| **2048**| **1.65 GB/s** | **`606 GFLOPS` (Ceiling)** |
 
-| Matrix Size ($N$) | Execution Time | Achieved Memory Bandwidth | Achieved Compute |
-| :---: | :---: | :---: | :---: |
-| **512** | `0.0005s` | **5.66 GB/s** | `519 GFLOPS` |
-| **1024**| `0.0037s` | **3.14 GB/s** | `575 GFLOPS` |
-| **2048**| `0.0283s` | **1.65 GB/s** | **`606 GFLOPS` (Ceiling)** |
+**Naive C++ Scaling:**
+| Matrix Size ($N$) | Achieved Memory Bandwidth | Achieved Compute |
+| :---: | :---: | :---: |
+| **512** | `0.23 GB/s` | `21.5 GFLOPS` |
+| **2048**| `0.01 GB/s` | `6.2 GFLOPS` |
 
-### The Findings
+### 3. The Hardware Mechanism: Theoretical Absolute Ceilings
+To prove the roofline, we must establish the physical limits of the test silicon (Intel Core i7-13650HX). 
 
-1. **The Arithmetic Intensity Roofline:** 
-   Look precisely at the PyTorch metrics as the matrix scales from $N=512$ to $N=2048$. 
-   The Memory Bandwidth physically **drops** (from 5.66 GB/s down to 1.65 GB/s), while the Compute physically **increases** (hitting a hard ceiling at ~606 GFLOPS). 
-   This is the exact mathematical proof of the Roofline Model. At small $N$, the CPU is starved for data and is desperately pulling matrices across the memory bus as fast as it can (Memory Bound). At large $N$, the data chunks efficiently reside inside the L1/L2 caches, so the memory bus goes quiet (GB/s drops) and the CPU's arithmetic logic units (ALUs) are allowed to hit their physical limit (Compute Bound).
+As defined in the Methodology report, an AVX2 FMA instruction calculates 16 FLOPs per cycle. Across all 14 physical cores running at sustained boost frequencies, the **Absolute Theoretical Peak Compute** of this specific die is roughly **~816 GFLOPS**. 
 
-2. **The Collapse of Naive Algorithms:**
-   We can also look at what happens when an algorithm is poorly written. Here is the exact same math applied to the **Naive** C++ engine running across all 20 threads:
-   
-   | Matrix Size ($N$) | Achieved Memory Bandwidth | Achieved Compute |
-   | :---: | :---: | :---: |
-   | **256** | `0.36 GB/s` | `16.8 GFLOPS` |
-   | **512** | `0.23 GB/s` | `21.5 GFLOPS` |
-   | **1024**| `0.05 GB/s` | `9.3 GFLOPS` |
-   | **2048**| `0.01 GB/s` | `6.2 GFLOPS` |
+Looking at the PyTorch data, as the matrix scales from $N=512$ to $N=2048$, the achieved Memory Bandwidth physically *drops* (from 5.66 GB/s down to 1.65 GB/s). The data chunks fit efficiently inside the cache, the memory bus goes quiet, and the CPU's arithmetic logic units hit their physical limit. At 606 GFLOPS, PyTorch is achieving an incredible **74% of the absolute theoretical silicon limit**.
 
-   Because the Naive algorithm reads data in the wrong cache order, it never actually transitions to being Compute Bound. As $N$ gets larger, the cache thrashing becomes so severe that it physically stalls the entire CPU. The memory throughput collapses to `0.01 GB/s` and the compute collapses to a miserable `6.2 GFLOPS` (exactly 100x slower than PyTorch on the same exact silicon).
+The Naive algorithm, however, destroys its cache lines (as proven in A1). It is desperately pulling data across the memory bus for every single iteration. As $N$ scales, the memory throughput completely collapses to `0.01 GB/s` due to extreme bus contention, and the compute stalls out at a miserable `6.2 GFLOPS` (almost exactly 100x slower than PyTorch).
 
-This perfectly illustrates that scaling hardware (adding threads or wider vectors) is utterly useless if the algorithm cannot satisfy the Roofline Model's arithmetic intensity requirements.
+### 4. The Code Proof (Arithmetic Intensity)
+The roofline shift is dictated by the Arithmetic Intensity formula:
+$$ \text{Total FLOPs} = 2 \times N^3 $$
+$$ \text{Bytes Transferred} = 3 \times N^2 \times 4 \text{ bytes (floats)} $$
+$$ \text{Arithmetic Intensity} = \frac{2N^3}{12N^2} = \frac{N}{6} \text{ FLOPs/Byte} $$
+
+When $N$ is small, the intensity is low (Memory Bound). When $N$ is large, the intensity is massive (Compute Bound).
+
+### 5. The Verdict
+This perfectly illustrates that scaling hardware (adding threads or utilizing wider vector registers) is utterly useless if the algorithm cannot satisfy the Roofline Model's arithmetic intensity requirements. The naive algorithm never even touches the compute ceiling; it is strangled by the memory wall. PyTorch's MKL bypasses the memory wall through optimal blocking, allowing it to extract 74% of the silicon's physical potential.
