@@ -6,20 +6,19 @@ In hardware profiling, the "Roofline Model" is a framework used to determine if 
 Matrix multiplication has an "Arithmetic Intensity" of roughly $N/6$ (FLOPs per byte transferred). At small matrix sizes, you perform very little math per byte loaded. As $N$ scales, the arithmetic required scales exponentially faster than the memory required. My hypothesis was that I could map the transition point where PyTorch shifts from Memory Bound to Compute Bound, and prove mathematically why the Naive engine never gets there.
 
 ### 2. The Empirical Data
-I explicitly calculated the achieved memory throughput (Bytes Transferred / Execution Time) and achieved compute throughput (Floating Point Operations / Execution Time) for a multithreaded sweep. 
+I explicitly calculated the achieved memory throughput (useful bytes transferred / execution time) and achieved compute throughput (FLOPs / execution time) for a multithreaded sweep at $N=2048$. 
 
-**PyTorch (Intel MKL) Scaling:**
-| Matrix Size ($N$) | Achieved Memory Bandwidth | Achieved Compute |
-| :---: | :---: | :---: |
-| **512** | **5.66 GB/s** | `519 GFLOPS` |
-| **1024**| **3.14 GB/s** | `575 GFLOPS` |
-| **2048**| **1.65 GB/s** | **`606 GFLOPS` (Ceiling)** |
+This table perfectly maps the exact journey of optimization—from being completely strangled by the memory wall, to incrementally unlocking the compute capabilities of the CPU:
 
-**Naive C++ Scaling:**
-| Matrix Size ($N$) | Achieved Memory Bandwidth | Achieved Compute |
-| :---: | :---: | :---: |
-| **512** | `0.23 GB/s` | `21.5 GFLOPS` |
-| **2048**| `0.01 GB/s` | `6.2 GFLOPS` |
+**The Roofline Progression (N=2048, Multi-threaded):**
+| Engine | Paradigm | Achieved Memory Bandwidth | Achieved Compute |
+| :--- | :--- | :---: | :---: |
+| **C++** | Naive | `0.01 GB/s` | `6.2 GFLOPS` |
+| **C++** | Tiled | `0.11 GB/s` | `37.4 GFLOPS` |
+| **C++** | SIMD (AVX2) | `0.50 GB/s` | `171.8 GFLOPS` |
+| **PyTorch** | Intel MKL | **`1.65 GB/s`** | **`606.0 GFLOPS` (Ceiling)** |
+
+*(Note: PyTorch's scaling from N=512 up to N=2048 shows its memory bandwidth requirement dropping from 5.66 GB/s down to 1.65 GB/s as it successfully achieves peak arithmetic intensity).*
 
 ### 3. The Hardware Mechanism: Theoretical Absolute Ceilings
 To prove the roofline, we must establish the physical limits of the test silicon (Intel Core i7-13650HX). 
