@@ -1,5 +1,8 @@
 # CPP-vs-Torch: Outpacing PyTorch from scratch
 
+**[Check out the live deployment](https://cpp-vs-torch.vercel.app/)**
+
+
 Everyone uses PyTorch and NumPy, but very few people actually know what happens under the hood when you multiply two tensors. I decided to build two deep learning engines completely from scratch just to see how deep the rabbit hole goes, and to answer a single question.
 
 ### Can a solo dev build a matrix multiplication engine in raw C/C++ that beats PyTorch? 
