@@ -9,7 +9,7 @@ import time
 import json
 import sys
 
-# Ensure torch is single threaded
+# ensure torch is single threaded
 torch.set_num_threads(1)
 
 def run_single_thread_sweep(filepath):
@@ -20,7 +20,7 @@ def run_single_thread_sweep(filepath):
     
     with open(filepath, "w") as f:
         while N <= 2000:
-            # --- PyTorch ---
+            # --- pytorch ---
             A_pt = torch.ones((N, N), dtype=torch.float32)
             B_pt = torch.ones((N, N), dtype=torch.float32)
             C_warmup = torch.matmul(A_pt, B_pt)
@@ -41,7 +41,7 @@ def run_single_thread_sweep(filepath):
                 "avg_cycles": 0, "min_cycles": 0
             }) + "\n")
             
-            # --- Numpy ---
+            # --- numpy ---
             A_np = np.ones((N, N), dtype=np.float32)
             B_np = np.ones((N, N), dtype=np.float32)
             C_warmup_np = np.matmul(A_np, B_np)

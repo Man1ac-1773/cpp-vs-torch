@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
             total_time += epoch_time;
         }
 
-        // Test Evaluation
+        // test evaluation
         Tensor test_pred = model.forward(X_test);
         float test_acc = compute_accuracy(test_pred, Y_test);
         cout << "Test Accuracy: " << (test_acc * 100.0f) << "%" << endl;

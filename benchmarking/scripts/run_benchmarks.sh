@@ -1,10 +1,10 @@
 #!/bin/bash
 # run_benchmarks.sh
-# Automates the execution of all dummy MLP and MNIST MLP benchmarks
+# automates the execution of all dummy mlp and mnist mlp benchmarks
 
 set -e
 
-# Change directory to the root of the benchmarking folder
+# change directory to the root of the benchmarking folder
 cd "$(dirname "$0")/.."
 
 echo "========================================="
@@ -13,14 +13,14 @@ echo "========================================="
 
 mkdir -p data
 
-# Compile Dummy MLP Scripts
+# compile dummy mlp scripts
 echo "Compiling training/c_train.cpp..."
 g++ -O3 -march=native training/c_train.cpp -o training/c_train -fopenmp
 
 echo "Compiling training/cpp_train.cpp..."
 g++ -O3 -march=native training/cpp_train.cpp -o training/cpp_train -fopenmp
 
-# Compile MNIST MLP Scripts
+# compile mnist mlp scripts
 echo "Compiling training/c_mnist.cpp..."
 g++ -O3 -march=native training/c_mnist.cpp -o training/c_mnist -fopenmp
 

@@ -67,10 +67,10 @@ def main():
 
     optimizer = optim.SGD(model.parameters(), lr=LR)
     
-    # We are using CrossEntropyLoss, but our labels are one-hot encoded.
-    # PyTorch's CrossEntropyLoss expects class indices if target is 1D, or probabilities if target is 2D.
-    # We will pass the probabilities (or logits) to CrossEntropyLoss if PyTorch supports it, 
-    # but the easiest is to pass the argmax.
+    # i are using crossentropyloss, but my labels are one-hot encoded.
+    # gotta remember that pytorchs crossentropyloss expects class indices if target is 1d, or probabilities if target is 2d.
+    # i will pass the probabilities (or logits) to crossentropyloss if pytorch supports it, 
+    # honestly but the easiest is to pass the argmax.
     criterion = nn.CrossEntropyLoss()
     Y_train_idx = torch.argmax(Y_train, dim=1)
     Y_test_idx = torch.argmax(Y_test, dim=1)

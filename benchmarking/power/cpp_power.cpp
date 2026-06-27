@@ -9,7 +9,7 @@
 
 using namespace std;
 
-// Wrapper for Minigrad (C++ Engine)
+// just wrapping minigrad (c++ engine)
 double power_bench_cpp(uint N)
 {
     Tensor A(N, N);
@@ -63,7 +63,7 @@ void run_mnist_power_bench(ofstream& json_out)
 {
     cout << "Running Power Benchmark for MNIST (1 Epoch)..." << endl;
 
-    // Load MNIST
+    // load mnist
     uint INPUT_DIM = 784;
     uint HIDDEN_DIM = 256;
     uint OUTPUT_DIM = 10;

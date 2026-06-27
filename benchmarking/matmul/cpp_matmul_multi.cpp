@@ -9,7 +9,7 @@
 
 using namespace std;
 
-// Missing Multi-threaded Naive Implementation for C++
+// skipped multi-threaded naive implementation for c++
 ::Tensor matmul_naive_omp(const ::Tensor& a, const ::Tensor& b) {
     ::Tensor out(a.node->rows, b.node->cols);
     for(size_t i=0; i<out.node->rows*out.node->cols; i++) out.node->data[i] = 0.0f;
@@ -27,7 +27,7 @@ using namespace std;
     return out;
 }
 
-// Missing Multi-threaded Tiled Implementation for C++
+// skipped multi-threaded tiled implementation for c++
 ::Tensor matmul_tiled_omp(const ::Tensor& a, const ::Tensor& b) {
     ::Tensor out(a.node->rows, b.node->cols);
     for(size_t i=0; i<out.node->rows*out.node->cols; i++) out.node->data[i] = 0.0f;
@@ -70,7 +70,7 @@ void run_multi_thread_sweep(ofstream& json_out)
         ::Tensor B(N, N);
         for (size_t i = 0; i < N * N; i++) { A(i/N, i%N) = 1.0f; B(i/N, i%N) = 2.0f; }
         
-        // 1. NAIVE OMP
+        // 1. naive omp
         ::Tensor C_warmup = matmul_naive_omp(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {
             uint64_t cycles = get_cpu_cycles();
@@ -87,7 +87,7 @@ void run_multi_thread_sweep(ofstream& json_out)
                  << ", \"kernel\": \"naive\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time 
                  << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
-        // 2. TILED OMP
+        // 2. tiled omp
         total_time = 0; min_time = 1e9; total_cycles = 0; min_cycles = UINT64_MAX;
         ::Tensor C_tiled_warmup = matmul_tiled_omp(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {
@@ -105,7 +105,7 @@ void run_multi_thread_sweep(ofstream& json_out)
                  << ", \"kernel\": \"tiled\", \"lang\": \"cpp\", \"threads\": " << max_threads << ", \"avg_time\": " << (total_time/NUM_RUNS) << ", \"min_time\": " << min_time 
                  << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
-        // 3. SIMD MT (Minigrad's native pthread implementation)
+        // 3. simd mt (minigrads native pthread implementation)
         total_time = 0; min_time = 1e9; total_cycles = 0; min_cycles = UINT64_MAX;
         ::Tensor C_simd_warmup = matmul_simd_mt(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {

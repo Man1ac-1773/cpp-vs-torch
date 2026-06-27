@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Ensure we are in the right directory
+# man ensure i are in the right directory
 cd "$(dirname "$0")"
 
-# Create data directory
+# create data directory
 mkdir -p data
 LOG_FILE="data/bandwidth_data.jsonl"
 rm -f $LOG_FILE
@@ -35,16 +35,16 @@ for N in "${SIZES[@]}"; do
             continue
         fi
 
-        # Calculate metrics using bc
-        # Bytes = 3 * N^2 * 4 (float32 size)
-        # GB/s = Bytes / (1024^3 * TIME)
+        # calc metrics using bc
+        # bytes = 3 * n^2 * 4 (float32 size)
+        # gb/s = bytes / (1024^3 * time)
         GB_S=$(echo "scale=4; (3 * $N * $N * 4) / (1073741824 * $EXEC_TIME)" | bc)
         
-        # FLOPs = 2 * N^3
-        # GFLOPS = FLOPs / (10^9 * TIME)
+        # flops = 2 * n^3
+        # gflops = flops / (10^9 * time)
         GFLOPS=$(echo "scale=4; (2 * $N * $N * $N) / (1000000000 * $EXEC_TIME)" | bc)
 
-        # Write JSONL
+        # write jsonl
         echo "{\"N\": $N, \"backend\": \"$BACKEND\", \"time\": $EXEC_TIME, \"gb_s\": $GB_S, \"gflops\": $GFLOPS}" >> $LOG_FILE
         echo "  -> Backend=$BACKEND | Time: ${EXEC_TIME}s | Bandwidth: ${GB_S} GB/s | Compute: ${GFLOPS} GFLOPS"
     done

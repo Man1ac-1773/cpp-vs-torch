@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Ensure we are in the right directory
+# ensure i are in the right directory
 cd "$(dirname "$0")"
 
-# Create data directory
+# just create data directory
 mkdir -p data
 LOG_FILE="data/branch_data.jsonl"
 rm -f $LOG_FILE
@@ -25,7 +25,7 @@ for N in "${SIZES[@]}"; do
             CMD="./cpp_branch $N $BACKEND"
         fi
         
-        # The scripts output JSON to stdout. Capture it directly to the JSONL file.
+        # the scripts output json to stdout. capture it directly to the jsonl file.
         OUTPUT=$($CMD)
         
         if [[ $OUTPUT == {* ]]; then

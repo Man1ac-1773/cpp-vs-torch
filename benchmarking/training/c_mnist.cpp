@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
         load_mnist("../../resources/data/test_images.bin", "../../resources/data/test_labels.bin", X_test, Y_test);
 
         MLP3 model = mlp3_init(INPUT_DIM, HIDDEN1, HIDDEN2, OUTPUT_DIM);
-        // Random init
+        // random init
         for (uint i = 0; i < INPUT_DIM * HIDDEN1; i++) model.fc1.weight->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
         for (uint i = 0; i < HIDDEN1 * HIDDEN2; i++) model.fc2.weight->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
         for (uint i = 0; i < HIDDEN2 * OUTPUT_DIM; i++) model.fc3.weight->data[i] = ((float)rand() / RAND_MAX) * 0.2f - 0.1f;
@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
             total_time += epoch_time;
         }
 
-        // Test Evaluation
+        // test evaluation
         Tensor* test_pred = mlp3_forward(&model, X_test);
         float test_acc = compute_accuracy(test_pred, Y_test);
         cout << "Test Accuracy: " << (test_acc * 100.0f) << "%" << endl;

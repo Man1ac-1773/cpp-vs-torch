@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     
     uint step = 10;
     for (size_t N = 10; N <= 1000; N += step) {
-        // --- C++ (std::vector) TILED ---
+        // --- c++ (stdvector) tiled ---
         Tensor A(N, N);
         Tensor B(N, N);
         
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
         json_out << "{\"N\": " << N << ", \"algorithm\": \"tiled\", \"metric\": \"l1_misses\", \"value\": " << tiled_misses << "}\n";
         json_out << "{\"N\": " << N << ", \"algorithm\": \"tiled\", \"metric\": \"instructions\", \"value\": " << tiled_instr << "}\n";
 
-        // --- C++ (std::vector) SIMD ---
+        // --- c++ (stdvector) simd ---
         Tensor A2(N, N);
         Tensor B2(N, N);
         

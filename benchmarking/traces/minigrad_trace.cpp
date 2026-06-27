@@ -8,7 +8,7 @@ int main() {
     Tensor A(1000, 1000);
     Tensor B(1000, 1000);
     
-    // Warmup memory pages
+    // warmup memory pages
     for(int i=0; i<1000*1000; i++) {
         A.node->data[i] = 1.0f;
         B.node->data[i] = 2.0f;

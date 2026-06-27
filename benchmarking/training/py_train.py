@@ -27,7 +27,7 @@ def main():
 
     print(f"Training 2-Layer MLP on PyTorch Engine (Batch={BATCH_SIZE})...")
 
-    # Use uniform random to break symmetry
+    # gotta remember that use uniform random to break symmetry
     X = (torch.rand((BATCH_SIZE, INPUT_DIM)) * 2.0) - 1.0
     Y = (torch.rand((BATCH_SIZE, OUTPUT_DIM)) * 2.0) - 1.0
 
@@ -37,13 +37,13 @@ def main():
         nn.Linear(HIDDEN_DIM, OUTPUT_DIM, bias=False)
     )
 
-    # Manual weight init to match C/C++ magnitude
+    # manual weight init to match c/c++ magnitude
     with torch.no_grad():
         model[0].weight.uniform_(-0.1, 0.1)
         model[2].weight.uniform_(-0.1, 0.1)
 
-    # PyTorch's Linear applies matmul as X @ W^T, our C engines do X @ W.
-    # To be mathematically identical, we don't care, it's just dummy sweeps.
+    # pytorchs linear applies matmul as x @ w^t, my c engines do x @ w.
+    # to be mathematically identical, i dont care, its just dummy sweeps.
 
     optimizer = optim.SGD(model.parameters(), lr=LR)
     criterion = nn.MSELoss()

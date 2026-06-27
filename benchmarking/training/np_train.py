@@ -25,7 +25,7 @@ def main():
 
     print(f"Training 2-Layer MLP on Numpy Engine (Batch={BATCH_SIZE})...")
 
-    # Use uniform random
+    # use uniform random
     np.random.seed(42)
     X = (np.random.rand(BATCH_SIZE, INPUT_DIM).astype(np.float32) * 2.0) - 1.0
     Y = (np.random.rand(BATCH_SIZE, OUTPUT_DIM).astype(np.float32) * 2.0) - 1.0
@@ -39,32 +39,32 @@ def main():
     for epoch in range(EPOCHS):
         start_time = time.time()
 
-        # Forward Pass
+        # forward pass
         h1 = np.matmul(X, W1)
-        a1 = np.maximum(0, h1) # ReLU
+        a1 = np.maximum(0, h1) # relu
         pred = np.matmul(a1, W2)
 
-        # Loss (MSE)
+        # loss (mse)
         diff = pred - Y
         loss = np.mean(diff ** 2)
 
-        # Backward Pass
-        # dL/dPred = 2 * diff / (BATCH_SIZE * OUTPUT_DIM)
+        # backward pass
+        # dl/dpred = 2 * diff / (batch_size * output_dim)
         grad_pred = 2.0 * diff / (BATCH_SIZE * OUTPUT_DIM)
         
-        # grad_W2 = a1.T @ grad_pred
+        # grad_w2 = a1.t @ grad_pred
         grad_W2 = np.matmul(a1.T, grad_pred)
         
-        # grad_a1 = grad_pred @ W2.T
+        # grad_a1 = grad_pred @ w2.t
         grad_a1 = np.matmul(grad_pred, W2.T)
         
         # grad_h1 = grad_a1 * relu_deriv
         grad_h1 = grad_a1 * (h1 > 0).astype(np.float32)
         
-        # grad_W1 = X.T @ grad_h1
+        # grad_w1 = x.t @ grad_h1
         grad_W1 = np.matmul(X.T, grad_h1)
 
-        # Optimizer step
+        # optimizer step
         W1 -= LR * grad_W1
         W2 -= LR * grad_W2
 

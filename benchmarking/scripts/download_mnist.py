@@ -4,7 +4,7 @@ from torchvision import datasets
 
 import pathlib
 
-# Get the absolute path to the repo root
+# get the absolute path to the repo root
 repo_root = pathlib.Path(__file__).parent.parent.parent.absolute()
 data_dir = repo_root / "resources" / "data"
 

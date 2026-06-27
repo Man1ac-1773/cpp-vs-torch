@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     
     uint step = 10;
     for (size_t N = 10; N <= 1000; N += step) {
-        // --- NAIVE ---
+        // --- naive ---
         g_arena.top = 0;
         Tensor* A1 = new_tensor(N, N);
         Tensor* B1 = new_tensor(N, N);
@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
         json_out << "{\"N\": " << N << ", \"algorithm\": \"naive\", \"metric\": \"l1_misses\", \"value\": " << naive_misses << "}\n";
         json_out << "{\"N\": " << N << ", \"algorithm\": \"naive\", \"metric\": \"instructions\", \"value\": " << naive_instr << "}\n";
 
-        // --- TILED ---
+        // --- tiled ---
         g_arena.top = 0;
         Tensor* A2 = new_tensor(N, N);
         Tensor* B2 = new_tensor(N, N);
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
         json_out << "{\"N\": " << N << ", \"algorithm\": \"tiled\", \"metric\": \"l1_misses\", \"value\": " << tiled_misses << "}\n";
         json_out << "{\"N\": " << N << ", \"algorithm\": \"tiled\", \"metric\": \"instructions\", \"value\": " << tiled_instr << "}\n";
 
-        // --- SIMD ---
+        // --- simd ---
         g_arena.top = 0;
         Tensor* A3 = new_tensor(N, N);
         Tensor* B3 = new_tensor(N, N);

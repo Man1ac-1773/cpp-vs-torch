@@ -24,7 +24,7 @@ void run_single_thread_sweep(ofstream& json_out)
         Tensor* B = new_tensor(N, N);
         for (size_t i = 0; i < N * N; i++) { A->data[i] = 1.0f; B->data[i] = 2.0f; }
         
-        // 1. NAIVE
+        // 1. naive
         Tensor* C_warmup = tensor_matmul_naive(A, B);
         for (int r = 0; r < NUM_RUNS; r++) {
             uint64_t cycles = get_cpu_cycles();
@@ -42,7 +42,7 @@ void run_single_thread_sweep(ofstream& json_out)
                  << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
         g_arena.top = 0;
 
-        // 2. TILED
+        // 2. tiled
         A = new_tensor(N, N); B = new_tensor(N, N);
         for (size_t i = 0; i < N * N; i++) { A->data[i] = 1.0f; B->data[i] = 2.0f; }
         
@@ -64,7 +64,7 @@ void run_single_thread_sweep(ofstream& json_out)
                  << ", \"avg_cycles\": " << (total_cycles/NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
         g_arena.top = 0;
 
-        // 3. SIMD
+        // 3. simd
         A = new_tensor(N, N); B = new_tensor(N, N);
         for (size_t i = 0; i < N * N; i++) { A->data[i] = 1.0f; B->data[i] = 2.0f; }
         

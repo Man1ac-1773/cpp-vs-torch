@@ -8,7 +8,7 @@
 
 using namespace std;
 
-// Define the global matmul backend for minigrad
+// define the global matmul backend for minigrad
 
 
 int main(int argc, char* argv[]) {
@@ -67,10 +67,10 @@ int main(int argc, char* argv[]) {
                 cout << "Epoch " << epoch << " | Loss: " << loss_val << " | Time: " << epoch_time << "s" << endl;
             }
             
-            // Re-allocate computation graph nodes to simulate zeroing grad
-            // Actually, Minigrad's C++ relies on RAII and scope to destroy the graph!
-            // But we created pred, loss inside the loop, so they will be destroyed properly
-            // However, model weights accumulate gradients! We must zero them out.
+            // re-allocate computation graph nodes to fake zeroing grad
+            // actually, minigrads c++ relies on raii and scope to destroy the graph
+            // but i created pred, loss inside the loop, so they will be destroyed properly
+            // however, model weights accumulate gradients i must zero them out.
             for (auto p : model.parameters()) {
                 std::fill(p->node->grad.begin(), p->node->grad.end(), 0.0f);
             }

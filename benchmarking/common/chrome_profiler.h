@@ -75,7 +75,7 @@ public:
 #define PROFILE_END(name) delete _prof_##name
 
 #else
-// ==================== C IMPLEMENTATION ====================
+// so basically ==================== c implementation ====================
 #include <sys/time.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -135,7 +135,7 @@ static inline void c_profiler_dump(const char* filepath) {
     c_profile_count = 0; // reset for next run
 }
 
-// C MACROS
+// c macros
 #define PROFILER_DUMP(filepath) c_profiler_dump(filepath)
 #define PROFILE_START(name) long long _prof_start_##name = get_time_micro()
 #define PROFILE_END(name) c_profiler_write(#name, _prof_start_##name, get_time_micro())

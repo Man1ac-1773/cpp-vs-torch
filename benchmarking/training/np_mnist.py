@@ -70,22 +70,22 @@ def main():
 
             start_time = time.time()
 
-            # Forward Pass
+            # forward pass
             h1 = np.matmul(X_batch, W1)
             a1 = np.maximum(0, h1)
             h2 = np.matmul(a1, W2)
             a2 = np.maximum(0, h2)
             logits = np.matmul(a2, W3)
 
-            # Softmax + Cross Entropy
+            # softmax + cross entropy
             shifted_logits = logits - np.max(logits, axis=1, keepdims=True)
             exp_logits = np.exp(shifted_logits)
             probs = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
             
-            # Loss
+            # loss
             loss = -np.mean(np.sum(Y_batch * np.log(probs + 1e-8), axis=1))
 
-            # Backward Pass
+            # backward pass
             grad_logits = (probs - Y_batch) / BATCH_SIZE
             
             grad_W3 = np.matmul(a2.T, grad_logits)
@@ -98,7 +98,7 @@ def main():
             grad_h1 = grad_a1 * (h1 > 0).astype(np.float32)
             grad_W1 = np.matmul(X_batch.T, grad_h1)
 
-            # Optimizer step
+            # optimizer step
             W1 -= LR * grad_W1
             W2 -= LR * grad_W2
             W3 -= LR * grad_W3
@@ -109,7 +109,7 @@ def main():
         print(f"Epoch {epoch} | Avg Loss: {total_loss / NUM_BATCHES:.6f} | Compute Time: {epoch_time:.6f}s")
         total_time += epoch_time
 
-    # Test Evaluation
+    # test evaluation
     h1_test = np.matmul(X_test, W1)
     a1_test = np.maximum(0, h1_test)
     h2_test = np.matmul(a1_test, W2)

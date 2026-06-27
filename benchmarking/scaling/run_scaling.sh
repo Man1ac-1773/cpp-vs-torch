@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Ensure we are in the right directory
+# KILL YOURSELFFF AAAAHHHH 
 cd "$(dirname "$0")"
 
-# Create data directory
+# why even 
 mkdir -p data
 LOG_FILE="data/scaling_data.jsonl"
 rm -f $LOG_FILE
@@ -17,7 +17,7 @@ BACKENDS=("py" "naive" "tiled" "simd")
 
 echo "Starting Amdahl's Law Scaling Benchmarks at N=$N..."
 
-# Associative array to store baseline (1-thread) execution time for Speedup calculation
+# associative array to store baseline (1-thread) execution time for speedup calculation
 declare -A BASELINES
 
 for BACKEND in "${BACKENDS[@]}"; do
@@ -33,26 +33,26 @@ for BACKEND in "${BACKENDS[@]}"; do
             CMD="./cpp_scaling $N $BACKEND"
         fi
         
-        # Run command and capture execution time
+        # so basically run command and capture execution time
         EXEC_TIME=$($CMD)
         
-        # Check if the execution time is a valid number
+        # check if the execution time is a valid number
         if ! [[ $EXEC_TIME =~ ^[0-9]+([.][0-9]+)?$ ]]; then
             echo "Error running $CMD: $EXEC_TIME"
             continue
         fi
 
-        # If 1 thread, record as baseline
+        # if 1 thread, record as baseline
         if [ "$THREADS" -eq 1 ]; then
             BASELINES[$BACKEND]=$EXEC_TIME
             SPEEDUP=1.0
         else
-            # Calculate speedup factor = baseline / current
+            # calc speedup factor = baseline / current
             BASELINE=${BASELINES[$BACKEND]}
             SPEEDUP=$(echo "scale=4; $BASELINE / $EXEC_TIME" | bc)
         fi
 
-        # Write JSONL
+        # write jsonl, ew
         echo "{\"N\": $N, \"backend\": \"$BACKEND\", \"threads\": $THREADS, \"time\": $EXEC_TIME, \"speedup\": $SPEEDUP}" >> $LOG_FILE
         echo "  -> Threads=$THREADS | Time: ${EXEC_TIME}s | Speedup: ${SPEEDUP}x"
     done

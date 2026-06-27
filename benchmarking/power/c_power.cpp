@@ -9,7 +9,7 @@
 
 using namespace std;
 
-// Wrapper for Macrograd (C Engine)
+// just wrapping macrograd (c engine)
 double power_bench_c(uint N)
 {
     size_t checkpoint = g_arena.top;
@@ -66,7 +66,7 @@ void run_mnist_power_bench(ofstream& json_out)
 {
     cout << "Running Power Benchmark for MNIST (1 Epoch)..." << endl;
 
-    // Load MNIST
+    // load mnist
     uint INPUT_DIM = 784;
     uint HIDDEN_DIM = 256;
     uint OUTPUT_DIM = 10;

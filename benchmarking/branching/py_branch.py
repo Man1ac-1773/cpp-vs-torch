@@ -16,7 +16,7 @@ B = torch.ones((N, N), dtype=torch.float32)
 
 _ = torch.matmul(A, B)
 
-# Load the C wrapper
+# load the c wrapper
 lib = ctypes.CDLL("./libperf.so")
 lib.perf_init_branches.restype = ctypes.c_void_p
 lib.perf_init_misses.restype = ctypes.c_void_p

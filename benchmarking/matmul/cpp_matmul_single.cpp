@@ -28,7 +28,7 @@ void run_single_thread_sweep(ofstream& json_out)
             B(i / N, i % N) = 2.0f;
         }
 
-        // 1. NAIVE
+        // 1. naive
         ::Tensor C_warmup = A * B;
         for (int r = 0; r < NUM_RUNS; r++)
         {
@@ -47,7 +47,7 @@ void run_single_thread_sweep(ofstream& json_out)
                  << (total_time / NUM_RUNS) << ", \"min_time\": " << min_time
                  << ", \"avg_cycles\": " << (total_cycles / NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
-        // 2. TILED
+        // 2. tiled
         total_time = 0;
         min_time = 1e9;
         total_cycles = 0;
@@ -70,7 +70,7 @@ void run_single_thread_sweep(ofstream& json_out)
                  << (total_time / NUM_RUNS) << ", \"min_time\": " << min_time
                  << ", \"avg_cycles\": " << (total_cycles / NUM_RUNS) << ", \"min_cycles\": " << min_cycles << "}\n";
 
-        // 3. SIMD
+        // 3. simd
         total_time = 0;
         min_time = 1e9;
         total_cycles = 0;
