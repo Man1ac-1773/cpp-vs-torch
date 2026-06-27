@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 // bump allocator constants
-#define ARENA_PAGE_SIZE (1024 * 1024 * 1024) // 1GB, benchmarking in large tensors
+#define ARENA_PAGE_SIZE (1024 * 1024 * 1024) // 1gb, benchmarking with large tensors so gotta go big
 #define MAX_PAGES 1024
 
 typedef struct
@@ -15,7 +15,7 @@ typedef struct
     int top;
 } Arena;
 
-// ==== ARENA FUNCTIONS ====
+// ==== arena functions ====
 static inline void arena_init(Arena* g_arena)
 {
     if (g_arena->num_pages > 0)
@@ -46,7 +46,7 @@ static inline void arena_grow(Arena* g_arena)
     g_arena->num_pages++;
 }
 
-// helper to bump up to 32 byte allocation for later AVX SIMD instructions
+// bumping up to 32 byte allocation so avx simd instructions don't freak out later
 static inline size_t _align32(size_t size)
 {
     return (size + 31) & ~31;

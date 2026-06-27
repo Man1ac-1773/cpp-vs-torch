@@ -11,14 +11,13 @@
 #define f32 float
 #define uint unsigned int
 
-// defines maximum operand count for directed acyclic graph nodes.
+// setting the max operand count for the graph nodes
 #define MAX_PARENT 2
 
 typedef struct tensor_float_t Tensor;
 typedef void (*BackwardFn)(Tensor* self);
 
-// establishes static limit for computational graph depth.
-// facilitates array-based topological sorting without dynamic allocation.
+// hardcoding the max graph depth, lets me do array-based topo sorting without dynamic allocation headaches
 #define MAX_GRAPH_NODES 10000
 static Tensor* topo_order[MAX_GRAPH_NODES];
 static int topo_size = 0;
@@ -27,7 +26,7 @@ struct tensor_float_t
 {
     f32* data;
     f32* grad;
-    uint shape[2];  // 2 dimensional for now
+    uint shape[2];  // keeping it 2d for now
     uint stride[2]; // byte offset in any direction
     Tensor* parent[MAX_PARENT];
     int n_parent;
@@ -39,13 +38,13 @@ static Arena g_arena = {{NULL}, 0, 0};
 
 // ==== ====
 
-// validates tensor shape equivalence. returns false upon mismatch.
+// making sure tensor shapes match, returning false if they don't
 static inline bool _compare_shape(Tensor* a, Tensor* b)
 {
     return ((a->shape[0] == b->shape[0]) && (a->shape[1] == b->shape[1]));
 }
 
-// allocates new tensor via bump allocator. initializes data and gradient arrays to zero.
+// allocating a new tensor with the bump allocator, zeroing out data and grads
 static inline Tensor* new_tensor(uint rows, uint cols)
 {
     PROFILE_START(new_tensor);
@@ -69,9 +68,9 @@ static inline Tensor* new_tensor(uint rows, uint cols)
     return t;
 }
 
-// initiates addition operators.
+// setting up addition operators
 
-// executes raw matrix addition. writes directly to output array
+// raw matrix addition, just blasting it straight to the output array
 static inline void __mat_add(Tensor* a, Tensor* b, Tensor* out)
 {
     for (uint i = 0; i < a->shape[0] * a->shape[1]; i++)
@@ -80,7 +79,7 @@ static inline void __mat_add(Tensor* a, Tensor* b, Tensor* out)
     }
 }
 
-// executes raw matrix self-addition. utilized during gradient accumulation
+// raw self addition for gradient accumulation
 static inline void __self_mat_add(Tensor* in, f32* b)
 {
     for (uint i = 0; i < in->shape[0] * in->shape[1]; i++)
@@ -89,14 +88,14 @@ static inline void __self_mat_add(Tensor* in, f32* b)
     }
 }
 
-// computes backward pass for addition operator
+// backward pass for addition
 static void _add_backward(Tensor* self)
 {
     __self_mat_add(self->parent[0], self->grad);
     __self_mat_add(self->parent[1], self->grad);
 }
 
-// constructs addition node in computation graph. backward function mentioned
+// building the addition node in the graph
 static inline Tensor* tensor_add(Tensor* a, Tensor* b)
 {
     if (!_compare_shape(a, b))
@@ -106,7 +105,7 @@ static inline Tensor* tensor_add(Tensor* a, Tensor* b)
     Tensor* out = new_tensor(a->shape[0], a->shape[1]);
     __mat_add(a, b, out); // just write data
 
-    // gradient tracking
+    // tracking grads
     out->parent[0] = a;
     out->parent[1] = b;
     out->n_parent = 2;
@@ -116,7 +115,7 @@ static inline Tensor* tensor_add(Tensor* a, Tensor* b)
 
 // ==== ====
 //
-// initiates multiplication operators.
+// setting up multiplication operators
 static inline void __mat_hadmard_mul(Tensor* a, Tensor* b, Tensor* out)
 {
     for (uint i = 0; i < a->shape[0] * a->shape[1]; i++)
@@ -134,7 +133,7 @@ static void _hadmard_mul_backward(Tensor* self)
     }
 }
 
-// constructs hadamard product node in computation graph. attaches backward pass function. i hate typing hadamard.
+// making the hadamard product node and attaching the backward pass, man i hate typing hadamard
 static inline Tensor* tensor_hadmard(Tensor* a, Tensor* b)
 {
     if (!_compare_shape(a, b))
@@ -151,7 +150,7 @@ static inline Tensor* tensor_hadmard(Tensor* a, Tensor* b)
     return out;
 }
 
-// validates inner dimensions for matrix multiplication. assumes standard a@b format.
+// checking inner dims for matmul, assuming the standard a@b format
 static inline bool _shape_check_matmul(Tensor* a, Tensor* b)
 {
     return (a->shape[1] == b->shape[0]);
@@ -159,13 +158,13 @@ static inline bool _shape_check_matmul(Tensor* a, Tensor* b)
 
 // ==== ====
 
-// computes backward pass for standard matrix multiplication. simulates transposed access patterns.
+// backward pass for standard matmul, simulating transposed access patterns
 static void _matmul_backward(Tensor* self)
 {
     Tensor* A = self->parent[0];
     Tensor* B = self->parent[1];
 
-    // simulates matrix transpose via index manipulation. avoids physical memory reallocation.
+    // faking a transpose with index math so i don't have to allocate memory
 
     // grad_A += upstream_grad @ B^T
 #pragma omp parallel for
@@ -175,7 +174,7 @@ static void _matmul_backward(Tensor* self)
         {
             for (uint k = 0; k < A->shape[1]; k++)
             {
-                // B is accessed as [k, j] instead of [j, k]
+                // accessing B as [k, j] instead of [j, k]
                 A->grad[i * A->shape[1] + k] += self->grad[i * self->shape[1] + j] * B->data[k * B->shape[1] + j];
             }
         }
@@ -188,14 +187,14 @@ static void _matmul_backward(Tensor* self)
         {
             for (uint i = 0; i < A->shape[0]; i++)
             {
-                //  A is accessed as [i, k] instead of [k, i]
+                // accessing A as [i, k] instead of [k, i]
                 B->grad[k * B->shape[1] + j] += A->data[i * A->shape[1] + k] * self->grad[i * self->shape[1] + j];
             }
         }
     }
 }
 
-#define TILE_SIZE 32 // sizes tile to perfectly occupy l1 data cache.
+#define TILE_SIZE 32 // sizing tiles to perfectly fit the l1 data cache
 
 static void _matmul_backward_tiled(Tensor* self)
 {
@@ -247,7 +246,7 @@ static void _matmul_backward_tiled(Tensor* self)
     }
 }
 
-// executes optimized backward matrix multiplication. leverages simd intrinsics.
+// optimized backward matmul, abusing simd intrinsics
 static void _matmul_backward_simd(Tensor* self)
 {
     Tensor* A = self->parent[0];
@@ -257,7 +256,7 @@ static void _matmul_backward_simd(Tensor* self)
     uint K = A->shape[1];
     uint N = B->shape[1];
 
-    // calculates gradient of b. native memory layout supports efficient (k, i, j) loop ordering.
+    // calculating grad of b, native memory layout lets me do this fast (k, i, j) loop ordering
     for (uint k = 0; k < K; k++)
     {
         for (uint i = 0; i < M; i++)
@@ -279,7 +278,7 @@ static void _matmul_backward_simd(Tensor* self)
         }
     }
 
-    // calculates gradient of a. executes physical transpose of b into arena memory to enable contiguous simd loading.
+    // calculating grad of a, physically transposing b into the arena so i can get contiguous simd loading
     f32* B_T = (f32*) arena_alloc(&g_arena, K * N * sizeof(f32));
     for (uint k = 0; k < K; k++)
     {
@@ -289,7 +288,7 @@ static void _matmul_backward_simd(Tensor* self)
         }
     }
 
-    // executes simd multiplication between grad_out and transposed b.
+    // doing the simd multiplication between grad_out and transposed b
     for (uint i = 0; i < M; i++)
     {
         for (uint j = 0; j < N; j++)
@@ -376,7 +375,7 @@ static void _matmul_backward_simd_mt(Tensor* self)
     }
 }
 
-// naive matrix multiplication operator. utilizes standard o(n^3) nested loops.
+// naive matmul operator, standard o(n^3) nested loops
 static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
 {
     PROFILE_START(matmul_naive);
@@ -412,7 +411,7 @@ static inline Tensor* tensor_matmul_naive(Tensor* a, Tensor* b)
 
 
 
-// executes tiled matrix multiplication. forces temporal data locality within l1 cache. minimizes ram fetches.
+// tiled matmul, forcing temporal data locality in l1 cache so i don't have to fetch from ram as much
 static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
 {
     PROFILE_START(matmul_tiled);
@@ -425,7 +424,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
 
     Tensor* out = new_tensor(a->shape[0], b->shape[1]);
 
-    // iterates across macro tiles.
+    // iterating across the macro tiles
 #pragma omp parallel for
     for (uint i = 0; i < a->shape[0]; i += TILE_SIZE)
     {
@@ -434,8 +433,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
             for (uint k = 0; k < a->shape[1]; k += TILE_SIZE)
             {
 
-                // executes inner multiplication within 32x32 tiles. enforces boundary checks for non-compliant matrix
-                // dimensions.
+                // inner multiplication inside the 32x32 tiles, adding boundary checks for weird matrix dimensions
                 for (uint ii = i; ii < i + TILE_SIZE && ii < a->shape[0]; ii++)
                 {
                     for (uint jj = j; jj < j + TILE_SIZE && jj < b->shape[1]; jj++)
@@ -463,9 +461,7 @@ static inline Tensor* tensor_matmul_tiled(Tensor* a, Tensor* b)
     return out;
 }
 
-// executes simd matrix multiplication via avx intrinsics.
-// completely bypasses compiler vectorization.
-// i love raw assembly.
+// simd matmul using avx intrinsics, completely bypassing compiler vectorization, god i love raw assembly
 static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
 {
     PROFILE_START(matmul_simd);
@@ -480,16 +476,16 @@ static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
     uint K = a->shape[1];
     uint N = b->shape[1];
 
-    // enforces (i, k, j) loop order for contiguous memory access.
+    // enforcing (i, k, j) loop order for contiguous memory access
     for (uint i = 0; i < M; i++)
     {
         for (uint k = 0; k < K; k++)
         {
 
-            // loads single scalar from a. broadcasts 8 times into 256-bit register.
+            // loading a single scalar from a, broadcasting it 8 times into a 256-bit register
             __m256 a_val = _mm256_set1_ps(a->data[i * K + k]);
 
-            // iterates through columns in discrete chunks of 8 float32 values.
+            // iterating through columns in chunks of 8 float32s
             uint j = 0;
             for (; j + 8 <= N; j += 8)
             {
@@ -499,14 +495,14 @@ static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
                 // loads 8 contiguous float32 values from c.
                 __m256 c_vals = _mm256_loadu_ps(&out->data[i * N + j]);
 
-                // executes fused multiply-add. c = c + (a * b).
+                // doing the fused multiply-add, c = c + (a * b)
                 c_vals = _mm256_fmadd_ps(a_val, b_vals, c_vals);
 
-                // stores 8 contiguous float32 values back to c.
+                // storing 8 contiguous float32s back to c
                 _mm256_storeu_ps(&out->data[i * N + j], c_vals);
             }
 
-            // handles residual tail when matrix dimensions are not multiples of 8.
+            // handling the residual tail when matrix dims aren't multiples of 8
             for (; j < N; j++)
             {
                 out->data[i * N + j] += a->data[i * K + k] * b->data[k * N + j];
@@ -527,7 +523,7 @@ static inline Tensor* tensor_matmul_simd(Tensor* a, Tensor* b)
 
 // ==== Autograd engine ====
 
-// builds topological sort of computation graph. executes depth-first traversal.
+// building the topo sort of the graph with a depth-first traversal
 static inline void build_topo(Tensor* node)
 {
     if (!node || node->visited == 1)
@@ -542,7 +538,7 @@ static inline void build_topo(Tensor* node)
     topo_order[topo_size++] = node;
 }
 
-// executes full backward pass from specified root node. initializes gradient to 1.0f.
+// doing the full backward pass from the root node, initializing grad to 1.0f
 static inline void backwardPass(Tensor* root)
 {
     topo_size = 0;
@@ -562,8 +558,7 @@ static inline void backwardPass(Tensor* root)
 
 
 
-// multi-threaded SIMD implementation
-// ts genuinely black magic i have no clue what is going on
+// multi-threaded simd implementation, this is genuinely black magic and i have no clue what is going on
 static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
 {
     PROFILE_START(matmul_simd_mt);
@@ -608,7 +603,7 @@ static inline Tensor* tensor_matmul_simd_mt(Tensor* a, Tensor* b)
     return out;
 }
 
-// executes backward pass for relu activation.
+// backward pass for relu
 static void _relu_backward(Tensor* self)
 {
     for (uint i = 0; i < self->shape[0] * self->shape[1]; i++)
@@ -617,7 +612,7 @@ static void _relu_backward(Tensor* self)
     }
 }
 
-// applies rectified linear unit activation. constructs node in computation graph.
+// applying relu and building the node in the graph
 static inline Tensor* tensor_relu(Tensor* a)
 {
     Tensor* out = new_tensor(a->shape[0], a->shape[1]);
@@ -631,7 +626,7 @@ static inline Tensor* tensor_relu(Tensor* a)
     return out;
 }
 
-// executes backward pass for mse loss.
+// backward pass for mse loss
 static void _mse_backward(Tensor* self)
 {
     Tensor* pred = self->parent[0];
@@ -646,7 +641,7 @@ static void _mse_backward(Tensor* self)
     }
 }
 
-// computes mean squared error loss. reduces to 1x1 scalar tensor.
+// computing mse loss, reduces to a 1x1 scalar
 static inline Tensor* tensor_mse_loss(Tensor* pred, Tensor* target)
 {
     if (!_compare_shape(pred, target))
@@ -671,7 +666,7 @@ static inline Tensor* tensor_mse_loss(Tensor* pred, Tensor* target)
     return out;
 }
 
-// executes backward pass for softmax cross entropy loss.
+// backward pass for softmax cross entropy loss
 static void _cross_entropy_backward(Tensor* self)
 {
     Tensor* pred = self->parent[0];
@@ -698,7 +693,7 @@ static void _cross_entropy_backward(Tensor* self)
     }
 }
 
-// computes softmax cross entropy loss. reduces to 1x1 scalar tensor.
+// computing softmax cross entropy loss, reduces down to a 1x1 scalar
 static inline Tensor* tensor_cross_entropy_loss(Tensor* pred, Tensor* target)
 {
     if (!_compare_shape(pred, target))
@@ -725,7 +720,7 @@ static inline Tensor* tensor_cross_entropy_loss(Tensor* pred, Tensor* target)
         for (uint j = 0; j < num_classes; j++) {
             if (target->data[i * num_classes + j] > 0.5f) { // it's 1-hot
                 f32 prob = expf(pred->data[i * num_classes + j] - max_val) / sum_exp;
-                sum_loss += -logf(prob + 1e-8f); // add epsilon for numerical stability
+                sum_loss += -logf(prob + 1e-8f); // adding epsilon for numerical stability
             }
         }
     }

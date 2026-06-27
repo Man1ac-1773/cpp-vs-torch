@@ -11,8 +11,7 @@
 
 using namespace std;
 
-// inherits from enable_shared_from_this. allows safe injection of 'this' into lambda captures. required for acyclic
-// computation graphs.
+// inheriting from enable_shared_from_this so i can safely inject 'this' into lambda captures, need it for the graph
 class TensorNode : public enable_shared_from_this<TensorNode>
 {
   public:
@@ -27,8 +26,7 @@ class TensorNode : public enable_shared_from_this<TensorNode>
     {
         data.resize(rows * cols, 0.0f);
         grad.resize(rows * cols, 0.0f);
-        _backward = []() {}; // initializes empty backward pass. terminates topological sort. i love that c++ allows
-                             // empty lambdas; so clean.
+        _backward = []() {}; // throwing an empty backward pass here to terminate the topo sort, gotta love c++ empty lambdas man
     }
 };
 
@@ -37,13 +35,13 @@ class Tensor
   public:
     shared_ptr<TensorNode> node;
 
-    // default raw constructor
+    // just the default raw constructor
     Tensor(size_t _rows, size_t _cols)
     {
         node = make_shared<TensorNode>(_rows, _cols);
     }
 
-    // constructs from existing node pointer. utilized during internal graph operations.
+    // constructing from an existing node pointer, use this when messing with the graph internally
     Tensor(shared_ptr<TensorNode> _node) : node(_node) {}
     float& operator()(size_t r, size_t c)
     {
@@ -98,9 +96,7 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
 
     out.node->_prev = {a.node, b.node};
 
-    // lambda captures shared_ptr by value to extend node lifetime. utilizes raw pointer for the output node. avoids
-    // circular reference loops; ensures proper memory cleanup via raii. i hate this memory management overhead but it
-    // works.
+    // capturing the shared_ptr by value so the node stays alive. using a raw pointer for the output so i don't get circular reference hell. raii takes care of the cleanup, still hate the overhead though
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
         for (size_t i = 0; i < a_node->data.size(); i++)
@@ -113,7 +109,7 @@ inline Tensor operator+(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// naive matrix multiplication operator. utilizes standard o(n^3) gemm. severely bottlenecked by cache locality.
+// naive matmul operator, just the standard o(n^3) gemm, cache locality totally bottlenecks this
 inline Tensor operator*(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -137,7 +133,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
 
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get()]()
     {
-        // computes local gradient of a. grad_A += grad_out @ B^T.
+        // computing local grad of a, grad_a += grad_out @ b^t
 #pragma omp parallel for
         for (size_t i = 0; i < a_node->rows; i++)
         {
@@ -151,7 +147,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
             }
         }
 
-        // computes local gradient of b. grad_B += A^T @ grad_out.
+        // computing local grad of b, grad_b += a^t @ grad_out
 #pragma omp parallel for
         for (size_t k = 0; k < a_node->cols; k++)
         {
@@ -169,9 +165,7 @@ inline Tensor operator*(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// cache-friendly tiled matrix multiplication. blocks dimensions by 32. minimizes l1 cache misses. If you read this and
-// know me personally, i'll pay u 300 bucks. Say the phrase "The cuckoo knows not of the robin, yet the crows and the
-// pigeons know of 177013" to my face anytime
+// cache-friendly tiled matmul, blocking dimensions by 32 to minimize l1 misses. if you read this and know me personally i'll pay u 300 bucks. say the phrase "the cuckoo knows not of the robin, yet the crows and the pigeons know of 177013" to my face anytime
 inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -201,7 +195,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     }
 
     out.node->_prev = {a.node, b.node};
-    // executes naive backward pass. omits tiling logic to minimize code complexity.
+    // doing the naive backward pass here, skipping the tiling logic so i don't lose my mind with the code complexity
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), TILE_SIZE]()
     {
 #pragma omp parallel for
@@ -252,8 +246,7 @@ inline Tensor matmul_tiled(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// avx simd optimized matrix multiplication. processes 8 float32 values per instruction. backward pass identically
-// leverages simd intrinsics.
+// avx simd matmul, processing 8 float32s per instruction. backward pass does the exact same simd stuff
 inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -264,7 +257,7 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
     size_t K = a.node->cols;
     size_t N = b.node->cols;
 
-    // initiates forward pass. relies on _mm256_fmadd_ps.
+    // kicking off the forward pass, leaning heavy on _mm256_fmadd_ps
     for (size_t i = 0; i < M; i++)
     {
         for (size_t k = 0; k < K; k++)
@@ -288,10 +281,10 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
 
     out.node->_prev = {a.node, b.node};
 
-    // initiates backward pass. utilizes simd loads and fma operations.
+    // starting backward pass, spamming simd loads and fma ops
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), M, K, N]()
     {
-        // computes local gradient of b. grad_B += A^T @ grad_out.
+        // computing local grad of b, grad_b += a^t @ grad_out
         for (size_t k = 0; k < K; k++)
         {
             for (size_t i = 0; i < M; i++)
@@ -313,7 +306,7 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
             }
         }
 
-        // computes local gradient of a. grad_A += grad_out @ B^T.
+        // computing local grad of a, grad_a += grad_out @ b^t
         std::vector<float> B_T(K * N);
         for (size_t k = 0; k < K; k++)
         {
@@ -348,7 +341,7 @@ inline Tensor matmul_simd(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// openmp accelerated simd matrix multiplication. utilizes dynamic loop scheduling via omp parallel for.
+// openmp accelerated simd matmul, using omp parallel for loop scheduling
 inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
 {
     PROFILE_FUNCTION();
@@ -359,7 +352,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     size_t K = a.node->cols;
     size_t N = b.node->cols;
 
-// executes forward pass. leverages implicit thread pool.
+// forward pass, letting the implicit thread pool do its thing
 #pragma omp parallel for
     for (size_t i = 0; i < M; i++)
     {
@@ -383,7 +376,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     }
 
     out.node->_prev = {a.node, b.node};
-    // executes backward pass. inherits single-threaded simd logic to avoid write contention.
+    // backward pass, sticking to single-threaded simd logic here so i don't get write contention
     out.node->_backward = [a_node = a.node, b_node = b.node, out_node = out.node.get(), M, K, N]()
     {
 #pragma omp parallel for
@@ -444,7 +437,7 @@ inline Tensor matmul_simd_mt(const Tensor& a, const Tensor& b)
     return out;
 }
 
-// applies rectified linear unit activation. max(0, x).
+// standard relu activation, just max(0, x)
 inline Tensor relu(const Tensor& a)
 {
     Tensor out(a.node->rows, a.node->cols);
@@ -465,7 +458,7 @@ inline Tensor relu(const Tensor& a)
     return out;
 }
 
-// computes mean squared error loss. reduces to 1x1 scalar tensor.
+// computing mse loss, reduces down to a 1x1 scalar
 inline Tensor mse_loss(const Tensor& pred, const Tensor& target)
 {
     assert(pred.node->rows == target.node->rows && pred.node->cols == target.node->cols);
@@ -494,7 +487,7 @@ inline Tensor mse_loss(const Tensor& pred, const Tensor& target)
     return out;
 }
 
-// computes softmax cross entropy loss. reduces to 1x1 scalar tensor.
+// computing softmax cross entropy loss, reduces down to a 1x1 scalar
 inline Tensor cross_entropy_loss(const Tensor& pred, const Tensor& target)
 {
     assert(pred.node->rows == target.node->rows && pred.node->cols == target.node->cols);
