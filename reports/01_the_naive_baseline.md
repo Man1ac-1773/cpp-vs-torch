@@ -8,14 +8,16 @@ I ran a sweep from N=10 to N=2000 and dumped the data.
 
 ### The N=2000 Execution Times
 
+*(Note: All execution times below were captured on the `performance-plugged` battery profile to ensure the CPU is running at its maximum frequency without OS-level power throttling.)*
+
 | Engine | Language | Paradigm | Time (Seconds) | Relative Speed |
 |---|---|---|---|---|
-| **PyTorch** | C++ (ATen) | Highly Optimized | 0.23s | 1.0x (Baseline) |
-| **NumPy** | C (OpenBLAS) | Highly Optimized | 0.22s | 1.04x |
-| **My C Engine** | C | Naive O(N^3) | 16.48s | ~71x Slower |
-| **My C++ Engine** | C++ | Naive O(N^3) | 16.92s | ~73x Slower |
+| **PyTorch** | C++ (ATen) | Highly Optimized | 0.115s | 1.0x (Baseline) |
+| **NumPy** | C (OpenBLAS) | Highly Optimized | 0.112s | 1.02x |
+| **My C++ Engine** | C++ | Naive O(N^3) | 8.48s | ~73x Slower |
+| **My C Engine** | C | Naive O(N^3) | 9.73s | ~84x Slower |
 
-It took nearly 17 seconds to multiply two 2000x2000 matrices lmao. The gap between my unoptimized code and PyTorch was roughly 73x. 
+It took roughly 8.5 to 9.7 seconds to multiply two 2000x2000 matrices using the naive implementation. The gap between my unoptimized C++ code and PyTorch was massive—roughly 73x slower! 
 
 ### Why is it so slow?
 
@@ -25,8 +27,8 @@ When the naive nested loop iterates over the columns of the second matrix, the C
 
 **Key Learning:** Modern CPUs are heavily optimized for sequential memory access. When you skip around, the CPU's pre-fetcher cannot predict what memory you need next. This causes a phenomenon known as "Cache Thrashing", where the CPU constantly waits for data to be fetched from slow main memory instead of having it readily available in the ultra-fast L1 cache.
 
-To fix this 17-second disaster, I needed to step in and restructure the memory access patterns manually.
+To fix this disaster, I needed to step in and restructure the memory access patterns manually.
 
 ### Scripts and Raw Data
 
-The benchmarking logic for this phase can be found in `../benchmarking/matmul/c_matmul_single.cpp`, `../benchmarking/matmul/cpp_matmul_single.cpp`, and `../benchmarking/matmul/py_matmul_single.py`. The raw sweeping data used to generate these insights is logged in the `../benchmarking/matmul/data/` directory.
+The benchmarking logic for this phase can be found in [`c_matmul_single.cpp`](../benchmarking/matmul/c_matmul_single.cpp), [`cpp_matmul_single.cpp`](../benchmarking/matmul/cpp_matmul_single.cpp), and [`py_matmul_single.py`](../benchmarking/matmul/py_matmul_single.py). The raw sweeping data used to generate these insights is logged in the [`benchmarking/matmul/data/`](../benchmarking/matmul/data/) directory.

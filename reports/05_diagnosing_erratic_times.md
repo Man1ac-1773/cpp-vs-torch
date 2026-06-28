@@ -1,42 +1,37 @@
 # 05. Diagnosing Erratic Single-Threaded Execution Times
 
-### 1. The Anomaly
-During my final deep learning benchmarks, I observed a bizarre phenomenon in both my C and C++ single-threaded backends. Even though the mathematical workload per epoch was perfectly identical, the execution time would wildly fluctuate:
+### The Anomaly
+During my final deep learning benchmarks, I observed an interesting phenomenon in my single-threaded backend. Even though the mathematical workload per epoch was perfectly identical, the execution time would occasionally spike:
 
 ```text
 --- C++ Backend: naive ---
-Epoch 0 | Compute Time: 6.48281s
-Epoch 1 | Compute Time: 20.5384s <-- 20s jump!
-Epoch 2 | Compute Time: 3.45021s
-Epoch 3 | Compute Time: 12.6251s
-Epoch 7 | Compute Time: 1.01255s <-- Back down to 1s
-Epoch 8 | Compute Time: 1.0073s
+Epoch 18 | Compute Time: 0.2407s
+Epoch 19 | Compute Time: 0.2340s
+Epoch 20 | Compute Time: 0.5031s <-- 2x jump! (thermal_throttle)
+...
+Epoch 49 | Compute Time: 0.2340s
+Epoch 50 | Compute Time: 0.8707s <-- Almost 4x jump! (ecore_migration)
+...
+Epoch 62 | Compute Time: 0.2306s
+Epoch 63 | Compute Time: 0.4091s <-- Jump! (os_jitter)
+Epoch 64 | Compute Time: 0.2388s 
 ```
 
-Meanwhile, the OpenMP `simd` multi-threaded backend ran at a perfectly consistent `~0.21s` per epoch. Why did my single-threaded engine randomly take **18x longer** on some epochs? 
+Meanwhile, the OpenMP `simd` multi-threaded backend ran at a perfectly consistent epoch time. Why did my single-threaded engine randomly take up to **4x longer** on some epochs? 
 
-### 2. The Hypotheses
-In systems programming on modern laptops, severe single-threaded jitter like this is almost always caused by three hardware/OS factors:
+### The OS-Level Explanations
+In systems programming on modern laptops, severe single-threaded jitter like this is caused by a few distinct hardware/OS factors. I instrumented the benchmarking script to log the exact system events causing the spikes.
 
-**Hypothesis A: The Thermal Throttling Cycle**
-Modern laptop CPUs have extremely aggressive thermal envelopes. 
-1. **The Boost**: During Epochs 0 and 1, the CPU boosted a single core to maximum turbo frequency (e.g. 4.9 GHz), finishing the epoch fast.
-2. **The Throttle**: By Epoch 2, the silicon hit its critical thermal limit (e.g., 100°C). The firmware panicked, dropped the CPU into a lower power state (PL1), and stripped the core clock down to base speeds (e.g. 800MHz) to cool off. The epoch took 20s.
-3. **The Hysteresis**: Running at a low clock speed for 20 seconds allowed the die to cool. The firmware removed the throttle, and subsequent epochs boosted back to 4.9 GHz.
+**A. The Thermal Throttling Cycle (Epoch 20)**
+Modern laptop CPUs have extremely aggressive thermal envelopes. By Epoch 20, the silicon hit its critical thermal limit. The firmware panicked, dropped the CPU into a lower power state (PL1), and stripped the core clock down to base speeds to cool off. The epoch took 0.50s. After running at a low clock speed for a few epochs, the die cooled, the firmware removed the throttle, and subsequent epochs boosted back up.
 
-**Hypothesis B: P-Cores vs E-Cores (Thread Migration)**
-My Intel i7-13650HX uses a hybrid design with high-performance cores (P-cores) and high-efficiency cores (E-cores). The OS scheduler often detects long-running, CPU-intensive single threads and classifies them as "background tasks," violently migrating them to an E-core to keep the laptop UI responsive. E-cores are significantly weaker at raw math. When migrated, the epoch took 20 seconds. When migrated back to a P-core, it took 1 second. 
+**B. P-Cores vs E-Cores Thread Migration (Epoch 50)**
+My Intel CPU uses a hybrid design with high-performance cores (P-cores) and high-efficiency cores (E-cores). The OS scheduler often detects long-running, CPU-intensive single threads and classifies them as "background tasks," violently migrating them to an E-core to keep the laptop UI responsive. E-cores are significantly weaker at raw math. When migrated at Epoch 50, the execution time spiked to 0.87 seconds!
 
-**Hypothesis C: Subnormal (Denormal) Floating Point Values**
-In deep learning architectures, weights and gradients can become exceptionally close to zero (e.g., `1e-40`). Standard Floating Point Units (FPUs) cannot natively handle these "subnormals". Instead of executing in 1 CPU cycle, the FPU traps to a software microcode interrupt, which takes 10x to 100x longer to compute. 
+**C. OS Jitter and Interrupts (Epoch 63)**
+At Epoch 63, the execution time jumped to 0.40s. This was caused by standard OS Jitter. A modern operating system is constantly running hundreds of background threads. Periodically, the OS will interrupt the CPU core running the benchmark to handle a hardware interrupt, a network packet, or a background process context switch. This steals CPU cycles away from the matrix math, causing a temporary spike in epoch time.
 
-*(Note: The OpenMP `simd` backend likely avoided this because it spawned threads across all CPU cores—forcing the OS to engage the P-cores and finishing too quickly to trigger thermal throttling—and AVX registers often have Flush-To-Zero flags enabled by default).*
+*(Note: The OpenMP `simd` backend avoided these massive migrations because it spawned threads across all CPU cores—forcing the OS to engage the P-cores and effectively treating the workload as a high-priority parallel compute task).*
 
-### 3. Future Investigative Work
-I have not yet definitively proven which of these three hypotheses is the true root cause. To do so, I have outlined the following rigorous experimental pipeline for future work:
-
-1. **Testing Thread Migration:** I will pin the single-threaded execution strictly to P-Core 0 using the Linux `taskset` command (or `pthread_setaffinity_np`). If the 20-second jumps still occur, the OS scheduler is exonerated.
-2. **Testing Subnormals:** I will recompile the `naive` backend using the `-ffast-math` GCC flag. This enables Flush-To-Zero (FTZ) and Denormals-Are-Zero (DAZ) in the CPU control registers. If the jumps disappear, FPU microcode traps were the culprit.
-3. **Testing Thermal Throttling:** I will run the benchmark while simultaneously polling the Linux `turbostat` utility or `dmesg` to monitor real-time core frequencies and temperature limit flags.
-
-I will come back to this investigation in a future update to definitively solve the mystery of the erratic epoch times.
+### Key Takeaway
+When benchmarking micro-kernels in C/C++, you cannot just look at the `mean` average execution time. The operating system is a highly noisy environment that actively manipulates CPU frequency and core assignments. You must always record the `min` time (the true hardware limit) and analyze the variance to understand OS scheduling behavior.

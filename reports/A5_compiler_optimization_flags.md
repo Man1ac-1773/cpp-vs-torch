@@ -4,9 +4,10 @@ In systems engineering, there is a common misconception that performance is sole
 
 To mathematically prove exactly how much "free" performance a modern C++ compiler generates under the hood, I isolated the absolute slowest, purest, un-threaded $O(N^3)$ Naive Matrix Multiplication loop. 
 
-I then compiled the exact same `cpp` file using 6 different GCC optimization flags and benchmarked the execution time for $N=1000$.
+I then compiled the exact same `cpp` file using 6 different GCC optimization flags and benchmarked the execution time for $N=1000$. 
 
 ### Execution Time vs. GCC Flags (N=1000)
+*(Data recorded using the `performance-plugged` battery profile).*
 
 | GCC Flag | Execution Time | Speedup vs `-O0` | What It Does Under The Hood |
 | :--- | :--- | :--- | :--- |
@@ -29,6 +30,8 @@ By default, C++ compilers enforce strict IEEE floating-point compliance. This me
 
 Look closely at the data for `-O3 -march=native`. It is actually **slower** than `-O3` alone! 
 
-Why? This is a classic C++ systems-engineering trap. When you tell GCC to compile specifically for your exact hardware architecture (`native`), it pulls out all the stops. It may choose to use hyper-aggressive AVX-512 instructions, or unroll the loop so massively that the resulting machine code physically exceeds the tiny capacity of the CPU's L1 Instruction Cache (I-Cache). Alternatively, using wider registers can trigger immediate CPU frequency downclocking (thermal throttling). 
+Why? This is a classic C++ systems-engineering trap. When you tell GCC to compile specifically for your exact hardware architecture (`native`), it pulls out all the stops. It may choose to use hyper-aggressive AVX-512 instructions, or unroll the loop so massively that the resulting machine code physically exceeds the tiny capacity of the CPU's L1 Instruction Cache (I-Cache). 
 
-It proves a vital lesson: throwing `-march=native` at a codebase is not a magic bullet, and aggressive compiler hints can actively degrade memory-bound loops. Profiling is always required.
+More importantly, it forces the hardware to consume more power. Engaging wider AVX registers drastically increases the instantaneous current draw. On a laptop chassis, this immediately pushes the CPU out of its designated thermal envelope. The OS and CPU firmware instantly panic and engage aggressive thermal downclocking to save the chip from melting. 
+
+This proves a vital lesson: throwing `-march=native` at a codebase is not a magic bullet. Aggressive compiler hints can trigger hardware-level thermal throttling that actively degrades your loop's execution speed. Profiling across multiple OS power profiles is always required.

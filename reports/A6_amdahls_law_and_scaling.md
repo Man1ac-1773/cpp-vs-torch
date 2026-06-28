@@ -8,14 +8,15 @@ I then ran a massive $N=2000$ matrix multiplication, scaling the `OMP_NUM_THREAD
 
 ### Scaling Efficiency (Speedup vs Threads)
 
-*Note: The theoretical "Perfect Scaling" would be a 20.0x speedup at 20 threads.*
+*Note: The theoretical "Perfect Scaling" would be a 20.0x speedup at 20 threads. Data collected on `performance-plugged`.*
 
 | Threads | PyTorch Speedup | SIMD Speedup | Tiled Speedup | Naive Speedup |
 | :---: | :---: | :---: | :---: | :---: |
 | **1** | 1.00x | 1.00x | 1.00x | 1.00x |
 | **2** | 1.98x | 2.02x | 1.98x | 1.44x |
 | **4** | 3.68x | 4.02x | 3.92x | 3.80x |
-| **6** | **2.86x** | **5.33x** | **5.36x** | **4.66x** |
+| **5** | 3.84x | - | - | - |
+| **6** | **2.86x** (Drop!) | **5.33x** | **5.36x** | **4.66x** |
 | **7** | 3.10x | **4.65x** (Drop!) | **4.30x** (Drop!)| **3.91x** (Drop!)|
 | **12**| 3.82x | 5.53x | 6.88x | 6.19x |
 | **16**| 5.02x | 6.65x | 7.43x | 6.17x |
@@ -24,8 +25,11 @@ I then ran a massive $N=2000$ matrix multiplication, scaling the `OMP_NUM_THREAD
 ### The Findings
 
 1. **The P-Core to E-Core Dropoff:** 
-   Look precisely at the jump from **Thread 6 to Thread 7**. Across every single custom C++ backend, the speedup factor physically drops. A 6-thread workload ran *faster* than a 7-thread workload! 
-   This perfectly exposes modern asymmetric CPU architecture (like Intel's P-Core/E-Core or Hyper-Threading designs). Threads 1-6 occupied the high-performance physical cores. The moment Thread 7 was spawned, the OS either scheduled it onto a slower Efficiency Core (E-Core) or forced two threads to share a single core's resources via Hyper-Threading, causing immediate resource contention and cache thrashing.
+   Notice how the scaling drops severely at a specific core threshold. For PyTorch, the speedup plummeted from 3.84x (5 threads) to 2.86x (6 threads). For all custom C++ engines, the drop occurred exactly at Thread 7. 
+   This perfectly exposes modern asymmetric CPU architecture (like Intel's P-Core/E-Core designs). The initial threads occupied the high-performance physical cores. The moment the thread count exceeded the available P-Cores, the OS scheduled the next thread onto a significantly slower Efficiency Core (E-Core) or engaged Hyper-Threading. The fast P-Core threads finished early and then sat idle blocking on a synchronization barrier (`#pragma omp barrier`), waiting for the straggling E-Core thread to finish! This caused the entire matrix multiplication to slow down.
+
+> [!WARNING]
+> **Battery Profiles Alter Core Scaling:** The specific threshold where performance drops is heavily dependent on the OS Power Profile. On a `saver` profile, the Linux kernel prioritizes E-Core utilization significantly earlier in the thread count to save energy, meaning the drop-off happens earlier than Thread 6/7.
 
 2. **Memory Bottleneck vs Compute Bottleneck:**
    Amdahl's law dictates that the speedup is limited by the bottleneck. 
