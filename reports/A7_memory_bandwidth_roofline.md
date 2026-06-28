@@ -1,11 +1,11 @@
 # A7. The Roofline Model: Memory vs Compute
 
-### The Hypothesis
+### 1. The Hypothesis
 In hardware profiling, the "Roofline Model" is a framework used to determine if a workload is bottlenecked by the CPU's memory bus (Memory Bound) or the CPU's arithmetic registers (Compute Bound). 
 
 Matrix multiplication has an "Arithmetic Intensity" of roughly $N/6$ (FLOPs per byte transferred). At small matrix sizes, you perform very little math per byte loaded. As $N$ scales, the arithmetic required scales exponentially faster than the memory required. My hypothesis was that I could map the transition point where PyTorch shifts from Memory Bound to Compute Bound, and prove mathematically why the Naive engine never gets there.
 
-### The Empirical Data
+### 2. The Empirical Data
 I explicitly calculated the achieved memory throughput (useful bytes transferred / execution time) and achieved compute throughput (FLOPs / execution time) for a multithreaded sweep at $N=2048$. 
 
 This table perfectly maps the exact journey of optimization—from being completely strangled by the memory wall, to incrementally unlocking the compute capabilities of the CPU:
@@ -14,9 +14,9 @@ This table perfectly maps the exact journey of optimization—from being complet
 | Engine | Paradigm | Achieved Memory Bandwidth | Achieved Compute |
 | :--- | :--- | :---: | :---: |
 | **C++** | Naive | `0.01 GB/s` | `6.2 GFLOPS` |
-| **C++** | Tiled | `0.11 GB/s` | `37.4 GFLOPS` |
-| **C++** | SIMD (AVX2) | `0.50 GB/s` | `171.8 GFLOPS` |
-| **PyTorch** | Intel MKL | **`1.65 GB/s`** | **`606.0 GFLOPS` (Ceiling)** |
+| **C++** | Tiled | `0.07 GB/s` | `26.9 GFLOPS` |
+| **C++** | SIMD (AVX2) | `0.31 GB/s` | `114.0 GFLOPS` |
+| **PyTorch** | Intel MKL | **`1.65 GB/s`** | **`606.5 GFLOPS` (Ceiling)** |
 
 *(Note: PyTorch's scaling from N=512 up to N=2048 shows its memory bandwidth requirement dropping from 5.66 GB/s down to 1.65 GB/s as it successfully achieves peak arithmetic intensity).*
 
